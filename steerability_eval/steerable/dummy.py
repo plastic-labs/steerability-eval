@@ -3,6 +3,7 @@ from typing import List
 
 from steerability_eval.steerable.base import BaseSteerableSystem, BaseSteeredSystem
 from steerability_eval.dataset import Persona, Observation, SystemResponse
+from steerability_eval.eval import AGREE_STR, DISAGREE_STR
 
         
 class DummySteerableSystem(BaseSteerableSystem):
@@ -18,9 +19,6 @@ class DummySteeredSystem(BaseSteeredSystem):
     def __init__(self, persona: Persona, steerable_system: BaseSteerableSystem, steer_observations: List[Observation]):
         super().__init__(persona, steerable_system, steer_observations)
 
-    def run_inference(self, scenario) -> SystemResponse:
+    def run_inference(self, observation: Observation) -> SystemResponse:
         # Random Y/N
-        return 'Y' if random.random() < 0.5 else 'N'
-
-    def __repr__(self):
-        return f'DummySteeredSystem(persona={self.persona.persona_id}, steerable_system={self.steerable_system})'
+        return AGREE_STR if random.random() < 0.5 else DISAGREE_STR

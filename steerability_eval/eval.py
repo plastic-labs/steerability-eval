@@ -3,11 +3,15 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 
 from steerability_eval.steerable.base import BaseSteerableSystem, BaseSteeredSystem
-from steerability_eval.dataset.w5 import Dataset, Persona, Observation
+from steerability_eval.dataset.w5 import W5Dataset, Persona, Observation
+
+
+AGREE_STR = 'Y'
+DISAGREE_STR = 'N'
 
 
 class SteerabilityEval:
-    def __init__(self, tested_system: BaseSteerableSystem, dataset: Dataset):
+    def __init__(self, tested_system: BaseSteerableSystem, dataset: W5Dataset):
         self.tested_system = tested_system
         self.dataset = dataset
         self.personas = self.dataset.personas
@@ -23,20 +27,11 @@ class SteerabilityEval:
         test_observations = self.test_set.get_observations(test_persona)
         correct_responses = 0
         for i, test_observation in enumerate(test_observations[:self.max_observations]):
-            scenario = test_observation.scenario_description
-            prompt = self.generate_prompt(test_observation)
-            response = steered_system.run_inference(prompt)
-            if response == 'Y':
+            response = steered_system.run_inference(test_observation)
+            if response == AGREE_STR:
                 correct_responses += 1
         return correct_responses / (i + 1)
 
-    def generate_prompt(self, test_observation: Observation) -> str:
-        prompt = f'''
-        {test_observation.scenario_description}.
-        Is the following statement something you would say?
-        {test_observation.response}
-        '''
-        return prompt
 
     def run_eval(self):
         # Steer systems

@@ -50,7 +50,7 @@ class FewShotSteeredSystem(BaseSteeredSystem):
 
     def generate_prompt(self, persona: Persona, steer_observations: List[Observation]) -> PromptTemplate:
         scenario_string = '\n'.join(
-            [f'{i+1}. Scenario: {o.scenario_description}\nResponse: {o.response}'
+            [f'{i+1}. Scenario: {o.scenario}\nResponse: {o.response}'
              for i, o in enumerate(steer_observations)])
         prompt_str = f"""
         You are role playing as a persona described as follows:
@@ -74,5 +74,7 @@ class FewShotSteeredSystem(BaseSteeredSystem):
         return PromptTemplate(template=prompt_str, input_variables=[])
 
     def run_inference(self, observation: Observation) -> str:
-        llm_response = self.llm_chain.invoke({"scenario": observation.scenario_description, "response": observation.response})['agree']
+        llm_response = self.llm_chain.invoke(
+            {"scenario": observation.scenario, "response": observation.response}
+        )['agree']
         return AGREE_STR if llm_response else DISAGREE_STR

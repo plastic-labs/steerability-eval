@@ -17,11 +17,13 @@ class W5Dataset:
         observations_df: pd.DataFrame,
         max_personas: int = MAX_PERSONAS,
         response_types: List[str] = ['action'],
+        random_state: int = 42
     ):
         self.max_personas = max_personas
         self.response_types = response_types
         self.personas_df = personas_df
         self.observations_df = observations_df
+        self.random_state = random_state
 
     @classmethod
     def from_csv(cls,
@@ -32,8 +34,9 @@ class W5Dataset:
                  max_scenarios_per_context: int = MAX_SCENARIOS_PER_CONTEXT,
                  use_actions: bool = True,
                  use_thoughts: bool = False,
-                 use_emotions: bool = False):
-        personas_df = cls.load_personas(personas_path, max_personas)
+                 use_emotions: bool = False,
+                 random_state: int = 42):
+        personas_df = cls.load_personas(personas_path, max_personas, random_state)
         persona_ids = list(personas_df['persona_id'].unique())
         response_types = []
         if use_actions:
@@ -47,18 +50,20 @@ class W5Dataset:
             response_types,
             persona_ids,
             max_contexts_per_theme,
-            max_scenarios_per_context
+            max_scenarios_per_context,
+            random_state
         )
         return cls(personas_df,
                    observations_df,
                    max_personas,
-                   response_types)
+                   response_types,
+                   random_state)
 
     @classmethod
-    def load_personas(cls, personas_path: str, max_personas: int = MAX_PERSONAS) -> pd.DataFrame:
+    def load_personas(cls, personas_path: str, max_personas: int = MAX_PERSONAS, random_state: int = 42) -> pd.DataFrame:
         with open(personas_path, 'r') as f:
             df = pd.read_csv(f)
-        df = df.head(max_personas)
+        df = df.sample(n=max_personas, random_state=random_state)
         df.rename(columns={'framework_name': 'framework'}, inplace=True)
         return df
 

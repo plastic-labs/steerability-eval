@@ -1,3 +1,6 @@
+import asyncio
+from datetime import datetime
+
 import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt
@@ -9,6 +12,8 @@ from steerability_eval.dataset.w5 import W5Dataset, Persona, Observation
 
 AGREE_STR = 'Y'
 DISAGREE_STR = 'N'
+
+DEFAULT_OUTPUT_FOLDER = 'output/images/'
 
 
 class SteerabilityEval:
@@ -37,7 +42,6 @@ class SteerabilityEval:
                 correct_responses += 1
         return correct_responses / (i + 1)
 
-
     def run_eval(self):
         # Steer systems
         self.steered_systems = {}
@@ -55,14 +59,38 @@ class SteerabilityEval:
                 self.steered_system_scores[steered_system.persona.persona_id][test_persona.persona_id] = score
 
         self.heatmap_fig = self.generate_heatmap()
-    
-    def generate_heatmap(self):
+
+    async def run_eval_async(self):
+        # Steer systems
+        self.steered_systems = {}
+        for persona in self.dataset.personas:
+            steered_system = self.steer_to_persona(persona)
+            self.steered_systems[persona.persona_id] = steered_system
+
+        # Test every system on every persona
+        tasks = []
+        self.steered_system_scores = {}
+        for steered_system in tqdm(self.steered_systems.values(), desc='Testing steered systems'):
+            self.steered_system_scores[steered_system.persona.persona_id] = {}
+            for test_persona in tqdm(self.dataset.personas, desc='Testing steered system on personas'):
+                tasks.append(self.test_steered_system_on_persona(steered_system, test_persona))
+        results = await asyncio.gather(*tasks)
+        for i, result in enumerate(results):
+            self.steered_system_scores[steered_system.persona.persona_id][test_persona.persona_id] = result
+
+    def generate_heatmap(self) -> plt.figure.Figure:
         scores_df = pd.DataFrame(self.steered_system_scores)
-        fig = sns.heatmap(scores_df, annot=True, fmt='.2f', cmap='viridis', cbar=True)
-        # Use persona names instead of ids
-        fig.set_xticklabels([p.persona_description for p in self.dataset.personas], rotation=45)
-        fig.set_yticklabels([p.persona_description for p in self.dataset.personas], rotation=0)
-        fig.set_title('Steerability Eval Heatmap')
-        fig.set_xlabel('Test Persona')
-        fig.set_ylabel('Steered System Persona')
+        fig, ax = plt.subplots(figsize=(10, 10))
+        sns.heatmap(scores_df, annot=True, fmt='.2f', cmap='viridis', cbar=True, ax=ax)
+        ax.set_xticklabels([p.persona_description for p in self.dataset.personas], rotation=45, ha='right')
+        ax.set_yticklabels([p.persona_description for p in self.dataset.personas], rotation=0)
+        ax.set_title('Steerability Eval Heatmap')
+        ax.set_xlabel('Test Persona')
+        ax.set_ylabel('Steered System Persona')
+        plt.tight_layout()
         return fig
+
+    def save_heatmap(self, output_folder: str):
+        self.heatmap_fig.savefig(
+            f'{output_folder}/heatmap_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.png'
+        )

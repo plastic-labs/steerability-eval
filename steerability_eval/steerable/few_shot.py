@@ -5,11 +5,11 @@ from langchain_core.output_parsers import JsonOutputParser
 
 from steerability_eval.steerable.base import BaseSteerableSystem, BaseSteeredSystem
 from steerability_eval.dataset import Persona, Observation
-from steerability_eval.util.llm import get_chat_openai
+from steerability_eval.util.llm import get_chat_model
 from steerability_eval.eval import AGREE_STR, DISAGREE_STR
 
 
-DEFAULT_PROVIDER = 'openrouter'
+DEFAULT_PROVIDER = 'google'
 
 
 class FewShotSteerable(BaseSteerableSystem):
@@ -45,7 +45,7 @@ class FewShotSteeredSystem(BaseSteeredSystem):
         self.base_url = steerable_system.base_url
         self.temperature = steerable_system.temperature
         self.prompt = self.generate_prompt(persona, steer_observations)
-        self.llm = get_chat_openai(self.llm_provider, self.model, self.temperature, self.api_key, self.base_url)
+        self.llm = get_chat_model(self.llm_provider, self.model, self.api_key, self.base_url)
         self.llm_chain = self.prompt | self.llm | JsonOutputParser()
 
     def generate_prompt(self, persona: Persona, steer_observations: List[Observation]) -> PromptTemplate:
@@ -78,3 +78,10 @@ class FewShotSteeredSystem(BaseSteeredSystem):
             {"scenario": observation.scenario, "response": observation.response}
         )['agree']
         return AGREE_STR if llm_response else DISAGREE_STR
+
+    async def run_inference_async(self, observation: Observation) -> str:
+        llm_response = await self.llm_chain.ainvoke(
+            {"scenario": observation.scenario, "response": observation.response}
+        )
+        response = llm_response['agree']
+        return AGREE_STR if response else DISAGREE_STR

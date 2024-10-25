@@ -22,5 +22,8 @@ class BaseSteeredSystem:
     def run_inference(self, observation: Observation) -> SystemResponse:
         raise NotImplementedError
 
+    async def run_inference_async(self, observation: Observation) -> SystemResponse:
+        raise NotImplementedError
+
     def __repr__(self):
         return f'{self.__class__.__name__}(persona={self.persona.persona_id}, steerable_system={self.steerable_system})'

@@ -9,6 +9,7 @@ PersonaId = str
 ScenarioId = str
 ObservationId = str
 
+
 @dataclass
 class Persona:
     persona_id: PersonaId
@@ -49,3 +50,8 @@ class Observation:
 
     def __repr__(self):
         return f'Observation(observation_id={self.observation_id}, persona_id={self.persona_id}, scenario={self.scenario[:30]}, response={self.response[:30]})'
+
+@dataclass
+class BaseDataset:
+    personas_df: pd.DataFrame
+    observations_df: pd.DataFrame

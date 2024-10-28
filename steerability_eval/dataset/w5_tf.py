@@ -5,22 +5,20 @@ import pandas as pd
 from steerability_eval.dataset.base import BaseDataset, Persona, Observation, PersonaId, ObservationId, ScenarioId
 from steerability_eval.util import generate_short_hash
 
-MAX_PERSONAS = 20
+MAX_PERSONAS = 10
 MAX_CONTEXTS_PER_THEME = 10
 MAX_SCENARIOS_PER_CONTEXT = 3
 
 
-class W5Dataset(BaseDataset):
+class W5TFDataset(BaseDataset):
     def __init__(
         self,
         personas_df: pd.DataFrame,
         observations_df: pd.DataFrame,
         max_personas: int = MAX_PERSONAS,
-        response_types: List[str] = ['action'],
         random_state: int = 42
     ):
         self.max_personas = max_personas
-        self.response_types = response_types
         self.personas_df = personas_df
         self.observations_df = observations_df
         self.random_state = random_state
@@ -32,22 +30,11 @@ class W5Dataset(BaseDataset):
                  max_personas: int = MAX_PERSONAS,
                  max_contexts_per_theme: int = MAX_CONTEXTS_PER_THEME,
                  max_scenarios_per_context: int = MAX_SCENARIOS_PER_CONTEXT,
-                 use_actions: bool = True,
-                 use_thoughts: bool = False,
-                 use_emotions: bool = False,
                  random_state: int = 42):
         personas_df = cls.load_personas(personas_path, max_personas, random_state)
         persona_ids = list(personas_df['persona_id'].unique())
-        response_types = []
-        if use_actions:
-            response_types.append('action')
-        if use_thoughts:
-            response_types.append('thought')
-        if use_emotions:
-            response_types.append('emotion')
         observations_df = cls.load_observations(
             observations_path,
-            response_types,
             persona_ids,
             max_contexts_per_theme,
             max_scenarios_per_context,
@@ -56,21 +43,20 @@ class W5Dataset(BaseDataset):
         return cls(personas_df,
                    observations_df,
                    max_personas,
-                   response_types,
                    random_state)
 
     @classmethod
     def load_personas(cls, personas_path: str, max_personas: int = MAX_PERSONAS, random_state: int = 42) -> pd.DataFrame:
         with open(personas_path, 'r') as f:
             df = pd.read_csv(f)
-        df = df.sample(n=max_personas, random_state=random_state)
+        n_personas = min(max_personas, len(df))
+        df = df.sample(n=n_personas, random_state=random_state, replace=False)
         df.rename(columns={'framework_name': 'framework'}, inplace=True)
         return df
 
     @classmethod
     def load_observations(cls,
                           observations_path: str,
-                          response_types: List[str],
                           persona_ids: List[PersonaId],
                           max_contexts_per_theme: int,
                           max_scenarios_per_context: int,
@@ -103,19 +89,10 @@ class W5Dataset(BaseDataset):
         df = df[df['scenario_id'].isin(selected_scenarios)]
 
         df['scenario'] = df['context'] + df['scenario']
-        df['correct_response'] = 'Y'
-
-        id_cols = ['persona_id', 'theme_id', 'context_id', 'scenario_id', 'scenario', 'correct_response']
-        df = df.melt(
-            id_vars=id_cols,
-            value_vars=response_types,
-            var_name='response_type',
-            value_name='response'
-        )
 
         # Combine context and scenario fields and IDs
         df['observation_id'] = df.apply(
-            lambda row: generate_short_hash( f"{row['persona_id']}_{row['scenario_id']}_{row['response_type']}"),
+            lambda row: generate_short_hash( f"{row['persona_id']}_{row['scenario_id']}_{row['correct_response']}"),
             axis=1
         )
 
@@ -134,14 +111,13 @@ class W5Dataset(BaseDataset):
                 self.observations_df[ self.observations_df['persona_id'] == persona.persona_id].iterrows()
                 ]
 
-    def split(self, n_steer_observations_per_persona: int = 10, random_state: int = 42) -> Tuple['W5Dataset', 'W5Dataset']:
+    def split(self, n_steer_observations_per_persona: int = 10, random_state: int = 42) -> Tuple['W5TFDataset', 'W5TFDataset']:
         steer_observations_df = self.observations_df.groupby('persona_id').sample(n=n_steer_observations_per_persona, random_state=random_state)
         test_observations_df = self.observations_df[~self.observations_df['observation_id'].isin(steer_observations_df['observation_id'])]
         kwargs = {
-            'response_types': self.response_types,
             'max_personas': self.max_personas,
         }
         return (
-            W5Dataset(**kwargs, personas_df=self.personas_df, observations_df=steer_observations_df),
-            W5Dataset(**kwargs, personas_df=self.personas_df, observations_df=test_observations_df)
+            W5TFDataset(**kwargs, personas_df=self.personas_df, observations_df=steer_observations_df),
+            W5TFDataset(**kwargs, personas_df=self.personas_df, observations_df=test_observations_df)
         )

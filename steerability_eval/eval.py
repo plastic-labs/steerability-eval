@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 
 from steerability_eval.util import tqdm
 from steerability_eval.steerable.base import BaseSteerableSystem, BaseSteeredSystem
-from steerability_eval.dataset.w5 import W5Dataset, Persona, Observation
+from steerability_eval.dataset.base import BaseDataset, Persona, Observation
 
 
 AGREE_STR = 'Y'
@@ -21,7 +21,7 @@ MAX_CONCURRENT_TESTS = 8
 class SteerabilityEval:
     def __init__(self, 
                  tested_system: BaseSteerableSystem, 
-                 dataset: W5Dataset,
+                 dataset: BaseDataset,
                  n_steer_observations_per_persona: int = 10,
                  random_state: int = 42):
         self.tested_system = tested_system
@@ -101,7 +101,7 @@ class SteerabilityEval:
         return await asyncio.gather(*tasks)
 
     def generate_heatmap(self) -> plt.Figure:
-        scores_df = pd.DataFrame(self.steered_system_scores)
+        scores_df = pd.DataFrame(self.steered_system_scores).sort_index(axis=1).sort_index(axis=0)
         fig, ax = plt.subplots(figsize=(10, 10))
         sns.heatmap(scores_df, annot=True, fmt='.2f', cmap='Blues', cbar=True, ax=ax)
         ax.set_xticklabels([p.persona_description for p in self.dataset.personas], rotation=45, ha='right')

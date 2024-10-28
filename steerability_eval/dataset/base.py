@@ -34,7 +34,8 @@ class Observation:
     scenario_id: ScenarioId
     scenario: str
     persona_id: PersonaId
-
+    correct_response: str
+    
     @classmethod
     def from_row(cls, row: pd.Series):
         return cls(
@@ -42,7 +43,8 @@ class Observation:
             response=row['response'],
             scenario_id=row['scenario_id'],
             scenario=row['scenario'],
-            persona_id=row['persona_id']
+            persona_id=row['persona_id'],
+            correct_response=row['correct_response']
         )
 
     def __repr__(self):

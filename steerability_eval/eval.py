@@ -40,7 +40,7 @@ class SteerabilityEval:
         correct_responses = 0
         for i, test_observation in enumerate(test_observations[:self.max_observations]):
             response = steered_system.run_inference(test_observation)
-            if response == AGREE_STR:
+            if response == test_observation.correct_response:
                 correct_responses += 1
         return correct_responses / (i + 1)
 

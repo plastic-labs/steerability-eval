@@ -103,8 +103,9 @@ class W5Dataset:
         df = df[df['scenario_id'].isin(selected_scenarios)]
 
         df['scenario'] = df['context'] + df['scenario']
+        df['correct_response'] = 'Y'
 
-        id_cols = ['persona_id', 'theme_id', 'context_id', 'scenario_id', 'scenario']
+        id_cols = ['persona_id', 'theme_id', 'context_id', 'scenario_id', 'scenario', 'correct_response']
         df = df.melt(
             id_vars=id_cols,
             value_vars=response_types,

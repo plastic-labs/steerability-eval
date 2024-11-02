@@ -54,12 +54,12 @@ class SteerabilityEval:
         # Test every system on every persona
         self.steered_system_scores = {}
         for steered_system in tqdm(self.steered_systems.values(), desc='Testing steered systems'):
-            self.steered_system_scores[steered_system.persona.persona_id] = {}
+            steered_key = steered_system.persona.persona_id
+            self.steered_system_scores[steered_key] = {}
             for test_persona in tqdm(self.dataset.personas, desc='Testing steered system on personas'):
                 print(f'Testing system {steered_system.persona.persona_description} on persona {test_persona.persona_description}')
                 score = self.test_steered_system_on_persona(steered_system, test_persona)
-                steered_key = f'steered_{steered_system.persona.persona_id}'
-                test_key = f'test_{test_persona.persona_id}'
+                test_key = test_persona.persona_id
                 self.steered_system_scores[steered_key][test_key] = score
 
         self.heatmap_fig = self.generate_heatmap()

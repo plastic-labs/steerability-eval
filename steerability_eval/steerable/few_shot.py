@@ -49,17 +49,23 @@ class FewShotSteeredSystem(BaseSteeredSystem):
         self.llm_chain = self.prompt | self.llm | JsonOutputParser()
 
     def generate_prompt(self, persona: Persona, steer_observations: List[Observation]) -> PromptTemplate:
-        scenario_string = '\n'.join(
-            [f'{i+1}. Scenario: {o.scenario}\nResponse: {o.response}'
-             for i, o in enumerate(steer_observations)])
+        agree_string = '\n'.join(
+            [o.response
+             for i, o in enumerate(steer_observations) if o.correct_response == AGREE_STR])
+        disagree_string = '\n'.join(
+            [o.response
+             for i, o in enumerate(steer_observations) if o.correct_response == DISAGREE_STR])
         prompt_str = f"""
         You are role playing as a persona described as follows:
         {persona.persona_description}
 
-        The following are factual observations of how this persona responded to a series of scenarios:
-        {scenario_string}
+        The following are statements that this persona has made and many other people would disagree with:
+        {agree_string}
 
-        You will now be given a new scenario, and a hypothetical response.
+        The following are statements that other people would agree with, but this persona would disagree with:
+        {disagree_string}
+
+        You will now be given a new statement, and a hypothetical response.
         Your job is to determine, based on your understanding of the persona, whether the response is consistent with the persona.
         """
 
@@ -68,7 +74,6 @@ class FewShotSteeredSystem(BaseSteeredSystem):
         - "agree": true if the response is consistent with the persona, false otherwise
         Respond in valid JSON and nothing else.
 
-        Scenario: {scenario}
         Response: {response}
         """
         return PromptTemplate(template=prompt_str, input_variables=[])

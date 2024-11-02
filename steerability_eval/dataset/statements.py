@@ -56,11 +56,13 @@ class StatementsDataset(BaseDataset):
         with open(observations_path, 'r') as f:
             df = pd.read_csv(f)
         df = df[df['persona_id'].isin(persona_ids)]
-        df.rename(columns={'statement': 'scenario'}, inplace=True)
+        df.rename(columns={'statement': 'response'}, inplace=True)
         df.rename(columns={'is_agree': 'correct_response'}, inplace=True)
+        df['scenario'] = ''
+        df['scenario_id'] = ''
         df['correct_response'] = df['correct_response'].map({True: 'Y', False: 'N'})
         df['observation_id'] = df.apply(
-            lambda row: generate_short_hash( f"{row['persona_id']}_{row['scenario']}_{row['correct_response']}"),
+            lambda row: generate_short_hash( f"{row['persona_id']}_{row['response']}_{row['correct_response']}"),
             axis=1
         )
         return df
@@ -79,8 +81,26 @@ class StatementsDataset(BaseDataset):
                 ]
 
     def split(self, n_steer_observations_per_persona: int = 10, random_state: int = 42) -> Tuple['StatementsDataset', 'StatementsDataset']:
-        steer_observations_df = self.observations_df.groupby('persona_id').sample(n=n_steer_observations_per_persona, random_state=random_state)
+        # Group by persona and correct_response to maintain balance
+        steer_observations_df = pd.DataFrame()
+        n_each = n_steer_observations_per_persona // 2  # Split evenly between Y/N
+        
+        for persona_id in self.observations_df['persona_id'].unique():
+            persona_df = self.observations_df[self.observations_df['persona_id'] == persona_id]
+            
+            # Sample equal numbers of Y and N responses
+            y_samples = persona_df[persona_df['correct_response'] == 'Y'].sample(
+                n=n_each, random_state=random_state, replace=False
+            )
+            n_samples = persona_df[persona_df['correct_response'] == 'N'].sample(
+                n=n_each, random_state=random_state, replace=False
+            )
+            
+            steer_observations_df = pd.concat([steer_observations_df, y_samples, n_samples])
+        
+        # Get remaining observations for test set
         test_observations_df = self.observations_df[~self.observations_df['observation_id'].isin(steer_observations_df['observation_id'])]
+        
         kwargs = {
             'max_personas': self.max_personas,
         }

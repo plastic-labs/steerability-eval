@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, List, Tuple, Type
 
 import pandas as pd
 
@@ -55,3 +55,23 @@ class Observation:
 class BaseDataset:
     personas_df: pd.DataFrame
     observations_df: pd.DataFrame
+
+    @classmethod
+    def merge(cls, datasets: List['BaseDataset']) -> 'BaseDataset':
+        dataset_class = datasets[0].__class__
+        assert all([d.__class__ == dataset_class for d in datasets]), 'All datasets must be of the same class'
+        return dataset_class(
+            personas_df=pd.concat([d.personas_df for d in datasets], ignore_index=True),
+            observations_df=pd.concat([d.observations_df for d in datasets]),
+            max_personas=sum([d.max_personas for d in datasets])
+        )
+
+    @property
+    def personas(self) -> List[Persona]:
+        return [Persona.from_row(row) for _, row in self.personas_df.iterrows()]
+
+    def split(self, n_steer_observations_per_persona: int) -> Tuple['BaseDataset', 'BaseDataset']:
+        raise NotImplementedError
+
+    def get_observations_by_persona(self, persona: Persona) -> List[Observation]:
+        raise NotImplementedError

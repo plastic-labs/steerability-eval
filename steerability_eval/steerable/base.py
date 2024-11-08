@@ -1,6 +1,5 @@
 from typing import List
-from steerability_eval.dataset import Persona, Observation, SystemResponse
-
+from steerability_eval.dataset.base import Persona, Observation, SystemResponse
 
 class BaseSteerableSystem:
     def __init__(self):

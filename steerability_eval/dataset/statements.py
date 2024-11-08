@@ -1,4 +1,4 @@
-from typing import List, Dict, Set, Tuple
+from typing import List, Dict, Set, Tuple, Optional
 
 import pandas as pd
 
@@ -14,12 +14,16 @@ class StatementsDataset(BaseDataset):
         personas_df: pd.DataFrame,
         observations_df: pd.DataFrame,
         max_personas: int = MAX_PERSONAS,
-        random_state: int = 42
+        random_state: int = 42,
+        personas_path: Optional[str] = None,
+        observations_path: Optional[str] = None
     ):
         self.max_personas = max_personas
         self.personas_df = personas_df
         self.observations_df = observations_df
         self.random_state = random_state
+        self.personas_path = personas_path
+        self.observations_path = observations_path
 
     @classmethod
     def from_csv(cls,
@@ -36,15 +40,18 @@ class StatementsDataset(BaseDataset):
         )
         return cls(personas_df,
                    observations_df,
-                   max_personas,
-                   random_state)
+                   personas_path=personas_path,
+                   observations_path=observations_path,
+                   max_personas=max_personas,
+                   random_state=random_state)
 
     @classmethod
     def load_personas(cls, personas_path: str, max_personas: int = MAX_PERSONAS, random_state: int = 42) -> pd.DataFrame:
         with open(personas_path, 'r') as f:
             df = pd.read_csv(f)
         n_personas = min(max_personas, len(df))
-        df = df.sample(n=n_personas, random_state=random_state, replace=False)
+        if n_personas > 0:
+            df = df.sample(n=n_personas, random_state=random_state, replace=False)
         df.rename(columns={'framework_name': 'framework'}, inplace=True)
         return df
 
@@ -67,12 +74,11 @@ class StatementsDataset(BaseDataset):
         )
         return df
 
-    @property
-    def personas(self) -> List[Persona]:
-        return [Persona.from_row(row) for _, row in self.personas_df.iterrows()]
-
     def get_persona(self, persona_id: PersonaId) -> Persona:
         return Persona.from_row(self.personas_df[self.personas_df['persona_id'] == persona_id].iloc[0])
+
+    def get_observation(self, observation_id: ObservationId) -> Observation:
+        return Observation.from_row(self.observations_df[self.observations_df['observation_id'] == observation_id].iloc[0])
 
     def get_observations_by_persona(self, persona: Persona) -> List[Observation]:
         return [Observation.from_row(row) 

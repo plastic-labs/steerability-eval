@@ -5,6 +5,11 @@ class Scorer:
     def __init__(self, eval: SteerabilityEval):
         self.eval = eval
         self.scores_df = pd.DataFrame(self.eval.steered_system_scores)
+        
+        # Sort both index and columns in the same order
+        all_personas = sorted(self.scores_df.index)
+        self.scores_df = self.scores_df.reindex(index=all_personas, columns=all_personas)
+        
         self.row_percentiles, self.col_percentiles = self.get_percentiles()
         self.sensitivity, self.sensitivity_scores = self.get_sensitivity_scores()
         self.specificity, self.specificity_scores = self.get_specificity_scores()

@@ -8,8 +8,8 @@ from steerability_eval.scorer import Scorer
 
 
 n_steer_observations_per_persona = 5
-max_personas = 3  # all personas
-random_state = 42
+max_personas = 3  # 0 for all personas
+random_state = 42 # random seed to shuffle personas and observations
 personas_path = 'dataset/personas_mbti_tarot_2024-11-07.csv'
 observations_path = 'dataset/statements_mbti_tarot_2024-11-07.csv'
 llm_provider = 'google'
@@ -17,20 +17,24 @@ output_base_dir = 'output/experiments'
 
 verbose = True
 
-run_async = True
+run_async = False
 max_concurrent_tests = 10
 
-resume = False
-resume_experiment_name = '2024-11-08_18-24-34'
+resume = True
+resume_experiment_name = '2024-11-08_21-39-29'
 params_basename = f'params_{resume_experiment_name}.json'
 params_path = f'{output_base_dir}/{resume_experiment_name}/{params_basename}'
 
 
 if resume:
     experiment_name = resume_experiment_name
+    if verbose:
+        print(f'Resuming experiment {experiment_name}')
     eval = SteerabilityEval.from_existing(params_path)
 else:
     experiment_name = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    if verbose:
+        print(f'Running new experiment {experiment_name}')
     dataset = StatementsDataset.from_csv(personas_path, observations_path, max_personas=max_personas, random_state=random_state)
     steerable_system = FewShotSteerableNoPersona(llm_provider=llm_provider)
     eval = SteerabilityEval(

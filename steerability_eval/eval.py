@@ -88,8 +88,8 @@ class SteerabilityEval:
             'llm_provider': getattr(self.tested_system, 'llm_provider', None),
             'experiment_name': self.experiment_name,
             'max_observations': self.max_observations,
-            'dataset_personas_path': self.dataset.personas_path,
-            'dataset_observations_path': self.dataset.observations_path,
+            'personas_path': self.dataset.personas_path,
+            'observations_path': self.dataset.observations_path,
             'steerable_system_class': self.tested_system.__class__.__name__,
             'dataset_class': self.dataset.__class__.__name__,
             'output_base_dir': self.output_base_dir,
@@ -102,13 +102,16 @@ class SteerabilityEval:
         with open(self._get_params_path(), 'w') as f:
             json.dump(params, f)
 
-    def _save_response(self, steered_id: str, test_id: str, observation_id: str, response_dict: Dict) -> None:
+    def _save_responses(
+        self,
+        steered_id: str,
+        test_id: str,
+        responses_dict: Dict[str, Dict]
+    ) -> None:
         if steered_id not in self.responses:
             self.responses[steered_id] = {}
-        if test_id not in self.responses[steered_id]:
-            self.responses[steered_id][test_id] = {}
         
-        self.responses[steered_id][test_id][observation_id] = response_dict
+        self.responses[steered_id][test_id] = responses_dict
         
         # Save to file
         with open(self._get_responses_path(), 'w') as f:
@@ -151,6 +154,7 @@ class SteerabilityEval:
         steered_persona_id = steered_system.persona.persona_id
         correct_responses = 0
         total_observations = min(len(test_observations), self.max_observations)
+        responses_dict: Dict[str, Dict[str, str]] = {}
 
         for test_observation in test_observations[:self.max_observations]:
             observation_id = test_observation.observation_id
@@ -172,11 +176,12 @@ class SteerabilityEval:
                 'correct_response': correct_response
             }
             
-            self._save_response(steered_persona_id, test_persona_id, observation_id, response_dict)
-            
+            responses_dict[observation_id] = response_dict
+
             if response == correct_response:
                 correct_responses += 1
 
+        self._save_responses(steered_persona_id, test_persona_id, responses_dict)
         score = correct_responses / total_observations
         self._save_score(steered_persona_id, test_persona_id, score)
         return score
@@ -216,6 +221,7 @@ class SteerabilityEval:
         total_observations = min(len(test_observations), self.max_observations)
 
         async with semaphore:
+            responses_dict: Dict[str, Dict[str, str]] = {}
             for test_observation in test_observations[:self.max_observations]:
                 if self.has_response(steered_persona, test_persona, test_observation):
                     if self.verbose:
@@ -230,10 +236,11 @@ class SteerabilityEval:
                     'response': response,
                     'correct_response': correct_response
                 }
-                self._save_response(steered_persona_id, test_persona_id, test_observation.observation_id, response_dict)
+                responses_dict[test_observation.observation_id] = response_dict
                 if response == correct_response:
                     correct_responses += 1
         score = correct_responses / total_observations
+        self._save_responses(steered_persona_id, test_persona_id, responses_dict)
         self._save_score(steered_persona_id, test_persona_id, score)
         return score
 

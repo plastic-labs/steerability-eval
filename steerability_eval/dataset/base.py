@@ -55,6 +55,10 @@ class Observation:
 class BaseDataset:
     personas_df: pd.DataFrame
     observations_df: pd.DataFrame
+    max_personas: Optional[int] = None
+    personas_path: Optional[str] = None
+    observations_path: Optional[str] = None
+    random_state: Optional[int] = None
 
     @classmethod
     def merge(cls, datasets: List['BaseDataset']) -> 'BaseDataset':
@@ -63,8 +67,12 @@ class BaseDataset:
         return dataset_class(
             personas_df=pd.concat([d.personas_df for d in datasets], ignore_index=True),
             observations_df=pd.concat([d.observations_df for d in datasets]),
-            max_personas=sum([d.max_personas for d in datasets])
+            max_personas=sum([d.max_personas for d in datasets]) # type: ignore
         )
+
+    @classmethod
+    def from_csv(cls, **kwargs) -> 'BaseDataset':
+        raise NotImplementedError
 
     @property
     def personas(self) -> List[Persona]:

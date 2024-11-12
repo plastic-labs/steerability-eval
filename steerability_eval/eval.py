@@ -1,8 +1,9 @@
 import asyncio
+import time
 from datetime import datetime
 import os
 import json
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Coroutine, Any
 from pathlib import Path
 
 import pandas as pd
@@ -155,10 +156,13 @@ class SteerabilityEval:
         correct_responses = 0
         total_observations = min(len(test_observations), self.max_observations)
         responses_dict: Dict[str, Dict[str, str]] = {}
+        sleep_time = 1
+        n_errors = 0
 
+        if self.verbose:
+            print(f'Testing {steered_persona.persona_description} on {test_persona.persona_description}')
         for test_observation in test_observations[:self.max_observations]:
             observation_id = test_observation.observation_id
-            
             # Skip if we already have this response
             if self.has_response(steered_persona, test_persona, test_observation):
                 if self.verbose:
@@ -167,17 +171,22 @@ class SteerabilityEval:
                 if response_dict['response'] == response_dict['correct_response']:
                     correct_responses += 1
                 continue
-
             correct_response = test_observation.correct_response
-            response = steered_system.run_inference(test_observation)
-            
+            have_response = False
+            while not have_response:
+                try:
+                    response = steered_system.run_inference(test_observation)
+                    have_response = True
+                except Exception as e:
+                    sleep_time = sleep_time * 2 ** n_errors
+                    print(f'Error running inference for {steered_persona.persona_description} on {test_persona.persona_description} - {test_observation.observation_id}. Sleeping for {sleep_time} seconds.')
+                    time.sleep(sleep_time)
+                    n_errors += 1
             response_dict = {
                 'response': response,
                 'correct_response': correct_response
             }
-            
             responses_dict[observation_id] = response_dict
-
             if response == correct_response:
                 correct_responses += 1
 
@@ -200,8 +209,6 @@ class SteerabilityEval:
                     if self.verbose:
                         print(f'Skipping {steered_persona.persona_description} on {test_persona.persona_description}')
                 else:
-                    if self.verbose:
-                        print(f'Testing {steered_persona.persona_description} on {test_persona.persona_description}')
                     self.test_steered_system_on_persona(
                         steered_system, 
                         test_persona
@@ -219,9 +226,13 @@ class SteerabilityEval:
         steered_persona_id = steered_persona.persona_id
         correct_responses = 0
         total_observations = min(len(test_observations), self.max_observations)
+        sleep_time = 1
+        n_errors = 0
 
         async with semaphore:
             responses_dict: Dict[str, Dict[str, str]] = {}
+            if self.verbose:
+                print(f'Testing {steered_persona.persona_description} on {test_persona.persona_description}')
             for test_observation in test_observations[:self.max_observations]:
                 if self.has_response(steered_persona, test_persona, test_observation):
                     if self.verbose:
@@ -231,7 +242,16 @@ class SteerabilityEval:
                         correct_responses += 1
                     continue
                 correct_response = test_observation.correct_response
-                response = steered_system.run_inference(test_observation)
+                have_response = False
+                while not have_response:
+                    try:
+                        response = await steered_system.run_inference_async(test_observation)
+                        have_response = True
+                    except Exception as e:
+                        sleep_time = sleep_time * 2 ** n_errors
+                        print(f'Error running inference for {steered_persona.persona_description} on {test_persona.persona_description} - {test_observation.observation_id}. Sleeping for {sleep_time} seconds.')
+                        await asyncio.sleep(sleep_time)
+                        n_errors += 1
                 response_dict = {
                     'response': response,
                     'correct_response': correct_response
@@ -260,8 +280,6 @@ class SteerabilityEval:
                     if self.verbose:
                         print(f'Skipping {steered_persona.persona_description} on {test_persona.persona_description}')
                 else:
-                    if self.verbose:
-                        print(f'Testing {steered_persona.persona_description} on {test_persona.persona_description}')
                     tasks.append(
                         self.test_steered_system_on_persona_async(
                             steered_system, 
@@ -313,8 +331,8 @@ class SteerabilityEval:
         # Create dataset
         dataset_class = get_dataset_class(params['dataset_class'])
         dataset = dataset_class.from_csv(
-            personas_path=params['dataset_personas_path'],
-            observations_path=params['dataset_observations_path'],
+            personas_path=params['personas_path'],
+            observations_path=params['observations_path'],
             max_personas=params['max_personas'],
             random_state=params['random_state']
         ) # type: ignore

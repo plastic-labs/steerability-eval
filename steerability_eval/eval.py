@@ -132,6 +132,8 @@ class SteerabilityEval:
         steered_systems = {}
         for persona in self.personas:
             steered_systems[persona.persona_id] = self.steer_to_persona(persona)
+        # Wait once for the last one
+        steered_systems[persona.persona_id].wait_until_ready()
         return steered_systems
 
     def steer_to_persona(self, persona: Persona) -> BaseSteeredSystem:
@@ -180,6 +182,7 @@ class SteerabilityEval:
                 except Exception as e:
                     sleep_time = sleep_time * 2 ** n_errors
                     print(f'Error running inference for {steered_persona.persona_description} on {test_persona.persona_description} - {test_observation.observation_id}. Sleeping for {sleep_time} seconds.')
+                    print(e)
                     time.sleep(sleep_time)
                     n_errors += 1
             response_dict = {
@@ -250,6 +253,7 @@ class SteerabilityEval:
                     except Exception as e:
                         sleep_time = sleep_time * 2 ** n_errors
                         print(f'Error running inference for {steered_persona.persona_description} on {test_persona.persona_description} - {test_observation.observation_id}. Sleeping for {sleep_time} seconds.')
+                        print(e)
                         await asyncio.sleep(sleep_time)
                         n_errors += 1
                 response_dict = {

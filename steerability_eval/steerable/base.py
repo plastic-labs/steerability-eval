@@ -26,3 +26,6 @@ class BaseSteeredSystem:
 
     def __repr__(self):
         return f'{self.__class__.__name__}(persona={self.persona.persona_id}, steerable_system={self.steerable_system})'
+
+    def wait_until_ready(self) -> None:
+        raise NotImplementedError

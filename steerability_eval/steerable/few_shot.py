@@ -106,3 +106,6 @@ class FewShotSteeredSystem(BaseSteeredSystem):
     async def run_inference_async(self, observation: Observation) -> str:
         llm_response = await self.llm_chain.ainvoke({"response": observation.response})
         return AGREE_STR if llm_response["agree"] else DISAGREE_STR
+
+    def wait_until_ready(self) -> None:
+        pass

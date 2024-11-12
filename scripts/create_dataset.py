@@ -169,7 +169,7 @@ async def process_persona(persona,
                 new_statements = await get_statements(
                     persona, 
                     agree_chain, 
-                    2 * n_statements,
+                    n_statements,
                     is_agree=True
                 )
                 statements_df = pd.concat([statements_df, new_statements], ignore_index=True)
@@ -177,17 +177,19 @@ async def process_persona(persona,
                 new_statements = await get_statements(
                     persona,
                     disagree_chain,
-                    2 * n_statements,
+                    n_statements,
                     is_agree=False
                 )
                 statements_df = pd.concat([statements_df, new_statements], ignore_index=True)
 
             n_agree = len(statements_df[statements_df['is_agree'] == True])
             n_disagree = len(statements_df[statements_df['is_agree'] == False])
+            print(f'Before filtering: {n_agree} agree statements and {n_disagree} disagree statements')
             statements_df = filter_statements(statements_df, similarity_threshold=similarity_threshold)
             n_agree = len(statements_df[statements_df['is_agree'] == True])
             n_disagree = len(statements_df[statements_df['is_agree'] == False])
             have_enough = n_agree >= n_statements and n_disagree >= n_statements
+            print(f'After filtering: {n_agree} agree statements and {n_disagree} disagree statements')
 
         agree_statements = statements_df[statements_df['is_agree'] == True].head(n_statements)
         disagree_statements = statements_df[statements_df['is_agree'] == False].head(n_statements)

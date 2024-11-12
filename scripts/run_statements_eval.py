@@ -3,12 +3,13 @@ import asyncio
 
 from steerability_eval.dataset.statements import StatementsDataset
 from steerability_eval.steerable.few_shot import FewShotSteerable
+from steerability_eval.steerable.honcho import HonchoSteerable
 from steerability_eval.eval import SteerabilityEval
 from steerability_eval.scorer import Scorer
 
 
 n_steer_observations_per_persona = 4
-max_personas = 40  # 0 for all personas
+max_personas = 4 # 0 for all personas
 random_state = 42 # random seed to shuffle personas and observations
 llm_provider = 'google'
 include_persona = False
@@ -17,11 +18,15 @@ personas_path = 'dataset/personas_all_frameworks_2024-11-11.csv'
 observations_path = 'dataset/statements_all_frameworks_30_2024-11-11.csv'
 output_base_dir = 'output/experiments'
 
-steerable_system_class = FewShotSteerable
+# steerable_system_class = FewShotSteerable
+# steerable_system_kwargs = {
+#     'llm_provider': llm_provider,
+#     'include_persona': include_persona,
+#     'include_observations': include_observations
+# }
+steerable_system_class = HonchoSteerable
 steerable_system_kwargs = {
-    'llm_provider': llm_provider,
-    'include_persona': include_persona,
-    'include_observations': include_observations
+    'verbose': True
 }
 
 verbose = True
@@ -29,8 +34,8 @@ verbose = True
 run_async = True
 max_concurrent_tests = 10
 
-resume = True
-resume_experiment_name = '2024-11-11_16-51-36'
+resume = False
+resume_experiment_name = None
 params_basename = f'params_{resume_experiment_name}.json'
 params_path = f'{output_base_dir}/{resume_experiment_name}/{params_basename}'
 

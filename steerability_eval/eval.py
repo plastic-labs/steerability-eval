@@ -253,7 +253,7 @@ class SteerabilityEval:
                     except Exception as e:
                         sleep_time = sleep_time * 2 ** n_errors
                         print(f'Error running inference for {steered_persona.persona_description} on {test_persona.persona_description} - {test_observation.observation_id}. Sleeping for {sleep_time} seconds.')
-                        print(e)
+                        print(e.__traceback__)
                         await asyncio.sleep(sleep_time)
                         n_errors += 1
                 response_dict = {

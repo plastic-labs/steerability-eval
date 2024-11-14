@@ -83,9 +83,5 @@ class HonchoSteeredSystem(BaseSteeredSystem):
                 sleep(0.5)
         return ''
 
-    def wait_until_ready(self) -> None:
-        ready = False
-        while not ready:
-            self.user_representation = self.wait_for_user_representation()
-            if self.user_representation:
-                ready = True
+    def wait_until_ready(self) -> str:
+        return self.wait_for_user_representation()

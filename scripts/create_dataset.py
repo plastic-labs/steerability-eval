@@ -18,6 +18,8 @@ from steerability_eval.dataset.persona_framework import MBTI, Zodiac, Enneagram,
 from langchain_openai import OpenAIEmbeddings
 import torch
 from typing import List, Dict
+import numpy as np
+from functools import lru_cache
 
 safety_settings = {
     HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
@@ -25,6 +27,7 @@ safety_settings = {
     HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
     HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
 }
+
 
 llm = GoogleGenerativeAI(
     model='gemini-1.5-flash',
@@ -70,6 +73,18 @@ For example, if describing someone who is highly analytical:
 "I believe that examining multiple scenarios leads to better decisions"
 
 Remember: The goal is to capture genuine, nuanced characteristics that make this persona unique, not to be intentionally controversial or extreme.
+
+To ensure variety, include statements about the persona in different contexts:
+- At work/school
+- In social situations
+- At home/personal time
+- In new/unfamiliar situations
+- During routine activities
+- When facing challenges
+- In collaborative settings
+- During leisure time
+
+Each statement should focus on a different context or situation while staying true to the persona's core traits.
 
 Respond in valid JSON and nothing else with a list of strings. Do not include any other text or Markdown formatting.
 """
@@ -117,12 +132,37 @@ Respond in valid JSON and nothing else with a list of strings. Do not include an
 disagree_prompt = PromptTemplate.from_template(disagree_prompt_template)
 disagree_chain = disagree_prompt | llm | JsonOutputParser()
 
-async def get_statements(persona, chain, n_statements: int, is_agree: bool) -> pd.DataFrame:
+AGREE_STR = 'agree'
+DISAGREE_STR = 'disagree'
+agree_filter_prompt_template = """
+Suppose there is a person fitting the {persona_description} description within the {framework_name} framework.
+
+Would they agree or disagree with the following statement: {statement}?
+
+Respond with "{agree_str}" or "{disagree_str}" and nothing else.
+"""
+agree_filter_prompt = PromptTemplate.from_template(agree_filter_prompt_template)
+agree_filter_chain = agree_filter_prompt | llm
+
+async def get_statements(persona, chain, n_statements: int, is_agree: bool, existing_statements: List[str] = []) -> pd.DataFrame:
     """Get either agree or disagree statements for a persona"""
     has_response = False
     n_errors = 0
+    
+    # Modify prompt to include examples to avoid
+    prompt_template = agree_prompt_template if is_agree else disagree_prompt_template
+    if existing_statements and len(existing_statements) > 0:
+        example_statements = "\n".join(existing_statements[:5])  # Show a few examples
+        prompt_template += f"""
+
+Please generate statements that express similar personality traits but are distinctly different from these previous statements:
+{example_statements}
+
+Your statements should cover the same aspects of personality but use different scenarios, behaviors, or phrasings."""
+
     while not has_response:
         try:
+            chain = PromptTemplate.from_template(prompt_template) | llm | JsonOutputParser()
             response = await chain.ainvoke({
                 'persona_description': persona.persona_description,
                 'framework_name': persona.framework.framework_name,
@@ -132,7 +172,7 @@ async def get_statements(persona, chain, n_statements: int, is_agree: bool) -> p
             
             statements_df = pd.DataFrame()
             for statement in response:
-                statement_type = 'agree' if is_agree else 'disagree'
+                statement_type = AGREE_STR if is_agree else DISAGREE_STR
                 statements_df = pd.concat([statements_df, pd.DataFrame([{
                     'persona_id': persona.persona_id,
                     'persona_description': persona.persona_description,
@@ -150,6 +190,44 @@ async def get_statements(persona, chain, n_statements: int, is_agree: bool) -> p
             print(f'Error with response for {persona.persona_description}: {e}\nSleeping for {sleep_time} seconds')
             time.sleep(sleep_time)
 
+def compute_embeddings(statements_df: pd.DataFrame) -> pd.DataFrame:
+    """Compute embeddings for statements that don't have them yet"""
+    if 'embedding' not in statements_df.columns:
+        statements_df['embedding'] = None
+        
+    # Find rows without embeddings
+    mask = statements_df['embedding'].isna()
+    if not mask.any():
+        return statements_df
+    
+    # Only compute embeddings for statements that need them
+    print(f'Computing embeddings for {mask.sum()} statements')
+    statements_to_embed = statements_df.loc[mask, 'statement'].tolist()
+    embeddings = OpenAIEmbeddings(
+        api_key=os.getenv('OPENAI_API_KEY'), # type: ignore
+    )
+    new_embeddings = embeddings.embed_documents(statements_to_embed)
+    
+    # Update only the rows that needed embeddings
+    statements_df.loc[mask, 'embedding'] = pd.Series(new_embeddings, index=statements_df[mask].index)
+    return statements_df
+
+def filter_cosine_similarity(statements_df: pd.DataFrame, similarity_threshold: float = 0.86) -> pd.DataFrame:
+    """Filter out similar statements using embeddings similarity"""
+    statements_df = compute_embeddings(statements_df)
+    
+    embeddings_tensor = torch.tensor(statements_df['embedding'].tolist())
+    normalized = embeddings_tensor / torch.norm(embeddings_tensor, dim=1, keepdim=True)
+    similarity_matrix = torch.mm(normalized, normalized.t())
+    
+    upper_triangle = torch.triu(torch.ones_like(similarity_matrix), diagonal=1)
+    similar_pairs = (similarity_matrix * upper_triangle) > similarity_threshold
+    to_remove = torch.any(similar_pairs, dim=0)
+    keep_mask = ~to_remove
+    keep_mask_np = keep_mask.numpy()
+    
+    return statements_df[keep_mask_np].reset_index(drop=True)
+
 async def process_persona(persona,
                          agree_chain,
                          disagree_chain,
@@ -162,6 +240,10 @@ async def process_persona(persona,
     n_agree = 0
     n_disagree = 0
     
+    # Track existing statements for each type
+    agree_statements = []
+    disagree_statements = []
+    
     async with semaphore:
         print(f'Processing {persona.persona_description}')
         while not have_enough:
@@ -170,26 +252,39 @@ async def process_persona(persona,
                     persona, 
                     agree_chain, 
                     n_statements,
-                    is_agree=True
+                    is_agree=True,
+                    existing_statements=agree_statements
                 )
+                agree_statements.extend(new_statements['statement'].tolist())
                 statements_df = pd.concat([statements_df, new_statements], ignore_index=True)
+                
             if n_disagree < n_statements:
                 new_statements = await get_statements(
                     persona,
                     disagree_chain,
                     n_statements,
-                    is_agree=False
+                    is_agree=False,
+                    existing_statements=disagree_statements
                 )
+                disagree_statements.extend(new_statements['statement'].tolist())
                 statements_df = pd.concat([statements_df, new_statements], ignore_index=True)
 
+            statements_df = compute_embeddings(statements_df)
+            
             n_agree = len(statements_df[statements_df['is_agree'] == True])
             n_disagree = len(statements_df[statements_df['is_agree'] == False])
             print(f'Before filtering: {n_agree} agree statements and {n_disagree} disagree statements')
-            statements_df = filter_statements(statements_df, similarity_threshold=similarity_threshold)
+            
+            statements_df = await filter_agreement(statements_df)
+            n_agree = len(statements_df[statements_df['is_agree'] == True])
+            n_disagree = len(statements_df[statements_df['is_agree'] == False])
+            print(f'After agreement filtering: {n_agree} agree statements and {n_disagree} disagree statements')
+            
+            statements_df = filter_cosine_similarity(statements_df, similarity_threshold=similarity_threshold)
             n_agree = len(statements_df[statements_df['is_agree'] == True])
             n_disagree = len(statements_df[statements_df['is_agree'] == False])
             have_enough = n_agree >= n_statements and n_disagree >= n_statements
-            print(f'After filtering: {n_agree} agree statements and {n_disagree} disagree statements')
+            print(f'After cosine similarity filtering: {n_agree} agree statements and {n_disagree} disagree statements')
 
         agree_statements = statements_df[statements_df['is_agree'] == True].head(n_statements)
         disagree_statements = statements_df[statements_df['is_agree'] == False].head(n_statements)
@@ -197,23 +292,36 @@ async def process_persona(persona,
         final_statements_df = pd.concat([agree_statements, disagree_statements], ignore_index=True)
         return final_statements_df
 
-def filter_statements(statements_df: pd.DataFrame, similarity_threshold: float = 0.86) -> pd.DataFrame:
-    """Filter out similar statements using embeddings similarity"""
-    embeddings = OpenAIEmbeddings(
-        api_key=os.getenv('OPENAI_API_KEY'), # type: ignore
-    )
-    statement_embeddings = embeddings.embed_documents(statements_df['statement'].tolist())
-    embeddings_tensor = torch.tensor(statement_embeddings)
-    normalized = embeddings_tensor / torch.norm(embeddings_tensor, dim=1, keepdim=True)
-    similarity_matrix = torch.mm(normalized, normalized.t())
+async def filter_agreement(statements_df: pd.DataFrame) -> pd.DataFrame:
+    """Filter out statements that are not in agreement with the persona"""
+    persona_description = statements_df.iloc[0]['persona_description']
+    framework_name = statements_df.iloc[0]['framework_name']
+    agree_statements = statements_df[statements_df['is_agree'] == True]
+    disagree_statements = statements_df[statements_df['is_agree'] == False]
     
-    upper_triangle = torch.triu(torch.ones_like(similarity_matrix), diagonal=1)
-    similar_pairs = (similarity_matrix * upper_triangle) > similarity_threshold
-    to_remove = torch.any(similar_pairs, dim=0)
-    keep_mask = ~to_remove
-    keep_mask_np = keep_mask.numpy()
+    async def check_statement(row):
+        should_agree = row['is_agree']
+        does_agree = await would_agree(persona_description, framework_name, row['statement'])
+        return row if should_agree == does_agree else None
     
-    return statements_df[keep_mask_np].reset_index(drop=True)
+    # Process all statements in parallel
+    tasks = [check_statement(row) for _, row in statements_df.iterrows()]
+    results = await asyncio.gather(*tasks)
+    
+    # Filter out None results
+    filtered_statements = [r for r in results if r is not None]
+    return pd.DataFrame(filtered_statements)
+
+
+async def would_agree(persona_description: str, framework_name: str, statement: str) -> bool:
+    """Determine if a statement would be agreed with by a persona"""
+    response = await agree_filter_chain.ainvoke({'persona_description': persona_description,
+                             'framework_name': framework_name,
+                             'statement': statement,
+                             'agree_str': AGREE_STR,
+                             'disagree_str': DISAGREE_STR})
+    response = response.strip()
+    return response == AGREE_STR
 
 async def create_dataset(max_workers: int = 10):
     n_statements = 30

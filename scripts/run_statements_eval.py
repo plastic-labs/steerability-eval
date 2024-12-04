@@ -3,7 +3,7 @@ import asyncio
 
 from steerability_eval.dataset.statements import StatementsDataset
 from steerability_eval.steerable.few_shot import FewShotSteerable
-from steerability_eval.steerable.honcho import HonchoSteerable
+from steerability_eval.steerable.honcho import AsyncHonchoSteerable, HonchoSteerable
 from steerability_eval.eval import SteerabilityEval
 from steerability_eval.scorer import Scorer
 
@@ -11,8 +11,8 @@ from steerability_eval.scorer import Scorer
 n_steer_observations_per_persona = 4
 max_personas = 0 # 0 for all personas
 random_state = 42 # random seed to shuffle personas and observations
-personas_path = 'dataset/personas.csv'
-observations_path = 'dataset/statements.csv'
+personas_path = 'dataset/personas_all_frameworks_2024-12-04.csv'
+observations_path = 'dataset/statements_all_frameworks_30_2024-12-04.csv'
 output_base_dir = 'output/experiments'
 
 verbose = True
@@ -36,7 +36,8 @@ params_path = f'{output_base_dir}/{resume_experiment_name}/{params_basename}'
 # }
 steerable_system_class = HonchoSteerable
 steerable_system_kwargs = {
-    'verbose': True
+    'verbose': True,
+    'wait_on_init': True
 }
 
 

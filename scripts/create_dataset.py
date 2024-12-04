@@ -201,7 +201,7 @@ def compute_embeddings(statements_df: pd.DataFrame) -> pd.DataFrame:
         return statements_df
     
     # Only compute embeddings for statements that need them
-    print(f'Computing embeddings for {mask.sum()} statements')
+    # print(f'Computing embeddings for {mask.sum()} statements')
     statements_to_embed = statements_df.loc[mask, 'statement'].tolist()
     embeddings = OpenAIEmbeddings(
         api_key=os.getenv('OPENAI_API_KEY'), # type: ignore
@@ -273,18 +273,18 @@ async def process_persona(persona,
             
             n_agree = len(statements_df[statements_df['is_agree'] == True])
             n_disagree = len(statements_df[statements_df['is_agree'] == False])
-            print(f'Before filtering: {n_agree} agree statements and {n_disagree} disagree statements')
+            # print(f'Before filtering: {n_agree} agree statements and {n_disagree} disagree statements')
             
             statements_df = await filter_agreement(statements_df)
             n_agree = len(statements_df[statements_df['is_agree'] == True])
             n_disagree = len(statements_df[statements_df['is_agree'] == False])
-            print(f'After agreement filtering: {n_agree} agree statements and {n_disagree} disagree statements')
+            # print(f'After agreement filtering: {n_agree} agree statements and {n_disagree} disagree statements')
             
             statements_df = filter_cosine_similarity(statements_df, similarity_threshold=similarity_threshold)
             n_agree = len(statements_df[statements_df['is_agree'] == True])
             n_disagree = len(statements_df[statements_df['is_agree'] == False])
             have_enough = n_agree >= n_statements and n_disagree >= n_statements
-            print(f'After cosine similarity filtering: {n_agree} agree statements and {n_disagree} disagree statements')
+            # print(f'After cosine similarity filtering: {n_agree} agree statements and {n_disagree} disagree statements')
 
         agree_statements = statements_df[statements_df['is_agree'] == True].head(n_statements)
         disagree_statements = statements_df[statements_df['is_agree'] == False].head(n_statements)

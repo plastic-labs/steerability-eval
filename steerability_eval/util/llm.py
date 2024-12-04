@@ -57,6 +57,10 @@ def get_chat_google_genai(
     model: Optional[str] = GOOGLE_MODEL,
     api_key: Optional[str] = GOOGLE_API_KEY
 ):
+    if model is None:
+        model = GOOGLE_MODEL
+    if api_key is None:
+        api_key = GOOGLE_API_KEY
     return ChatGoogleGenerativeAI(model=model, api_key=api_key) # type: ignore
 
 

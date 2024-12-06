@@ -126,7 +126,6 @@ class AsyncSteerabilityEval(BaseEval):
 
     async def run_eval(self, max_concurrent_tests: int = MAX_CONCURRENT_TESTS) -> None:
         semaphore = asyncio.Semaphore(max_concurrent_tests)
-        print(f'{self.steered_systems=}')
         tasks = []
         for steered_persona in self.personas:
             steered_system = self.steered_systems[steered_persona.persona_id]
@@ -173,7 +172,7 @@ class AsyncSteerabilityEval(BaseEval):
                     except Exception as e:
                         sleep_time = sleep_time * 2 ** n_errors
                         print(f'Error running inference for {steered_persona.persona_description} on {test_persona.persona_description} - {test_observation.observation_id}. Sleeping for {sleep_time} seconds.')
-                        print(e.__traceback__)
+                        print(e)
                         await asyncio.sleep(sleep_time)
                         n_errors += 1
                 response_dict = {

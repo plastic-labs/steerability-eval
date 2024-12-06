@@ -9,6 +9,7 @@
     "max_personas": 0,
     "random_state": 42,
     "n_steer_observations_per_persona": 4,
+    "inference_batch_size": 10,
     "steerable_system_type": "FewShotSteerable",
     "steerable_system_config": {
         "llm_provider": "google",

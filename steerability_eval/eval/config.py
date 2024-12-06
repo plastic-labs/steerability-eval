@@ -25,6 +25,7 @@ class EvalConfig:
     max_concurrent_tests: int = 8
     output_base_dir: str = 'output/experiments'
     experiment_name: Optional[str] = None
+    inference_batch_size: int = 10
 
     def to_dict(self) -> dict:
         """Convert config to dictionary for saving"""
@@ -43,7 +44,8 @@ class EvalConfig:
             'output_base_dir': self.output_base_dir,
             'experiment_name': self.experiment_name,
             'steerable_system_type': self.steerable_system_type,
-            'steerable_system_config': self.steerable_system_config
+            'steerable_system_config': self.steerable_system_config,
+            'inference_batch_size': self.inference_batch_size
         }
 
     @classmethod

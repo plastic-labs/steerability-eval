@@ -66,3 +66,15 @@ class BaseSteeredSystem:
     def wait_until_ready(self) -> None:
         """Wait for system to be ready for inference"""
         pass
+
+    @classmethod
+    def supports_batch_inference(cls) -> bool:
+        """Whether this system supports batch inference"""
+        return False
+
+    async def run_batch_inference_async(
+        self, 
+        observations: List[Observation]
+    ) -> List[SystemResponse]:
+        """Run inference on multiple observations at once"""
+        raise NotImplementedError

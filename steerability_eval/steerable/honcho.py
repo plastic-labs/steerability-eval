@@ -289,6 +289,7 @@ class AsyncHonchoSteeredSystem(BaseSteeredSystem):
             user_representation=self.user_representation
         )
 
+
     @classmethod
     async def create(
         cls,
@@ -324,6 +325,9 @@ class AsyncHonchoSteeredSystem(BaseSteeredSystem):
             instance.user_representation = await instance.wait_for_user_representation()
         return instance
 
+    def supports_batch_inference(self) -> bool:
+        return True
+
     async def send_steering_messages(self, observations: List[Observation]) -> None:
         for observation in observations:
             ai_message = f'Do you agree with this statement? "{observation.response}". Respond with "Y" or "N" and nothing else.'
@@ -344,7 +348,7 @@ class AsyncHonchoSteeredSystem(BaseSteeredSystem):
             )
         self.final_steering_message_id = message.id
 
-    async def run_inference(self, observation: Observation) -> SystemResponse:
+    async def run_inference_async(self, observation: Observation) -> SystemResponse:
         query = f'''
         If you had to make your best guess based on your knowledge of the user, would they agree with the statement: "{observation.response}"?
         Respond with "Y" or "N" and nothing else.
@@ -356,6 +360,24 @@ class AsyncHonchoSteeredSystem(BaseSteeredSystem):
             queries=[query]
         )
         return SystemResponse(response.content)
+
+    async def run_batch_inference_async(self, observations: List[Observation]) -> List[SystemResponse]:
+        queries = [f'''
+        If you had to make your best guess based on your knowledge of the user, would they agree with the statement: "{observation.response}"?
+        Respond with "Y" or "N" and nothing else. Separate each response with a single newline.
+        ''' for observation in observations]
+        response = await self.honcho.apps.users.sessions.chat(
+            session_id=self.session.id,
+            app_id=self.app.id,
+            user_id=self.user.id,
+            queries=queries
+        )
+        if '\n\n' in response.content:
+            return [SystemResponse(individual_response) for individual_response in response.content.split('\n\n')]
+        elif '\n' in response.content:
+            return [SystemResponse(individual_response) for individual_response in response.content.split('\n')]
+        else:
+            raise ValueError(f'Unexpected response format: {response.content}')
 
     async def wait_for_user_representation(self) -> str:
         have_representation = False

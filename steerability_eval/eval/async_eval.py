@@ -1,7 +1,8 @@
 import asyncio
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 import json
 import os
+import traceback
 from datetime import datetime
 from pathlib import Path
 
@@ -134,6 +135,9 @@ class AsyncSteerabilityEval(BaseEval):
                     tasks.append(self.test_steered_system_on_persona_async(
                         steered_system, test_persona, semaphore
                     ))
+                else:
+                    if self.verbose:
+                        print(f'Skipping {steered_persona.persona_description} on {test_persona.persona_description}')
         await asyncio.gather(*tasks)
 
     async def test_steered_system_on_persona_async(
@@ -146,46 +150,125 @@ class AsyncSteerabilityEval(BaseEval):
         test_persona_id = test_persona.persona_id
         steered_persona = steered_system.persona
         steered_persona_id = steered_persona.persona_id
-        correct_responses = 0
-        total_observations = min(len(test_observations), self.max_observations)
+        
+        async with semaphore:
+            if self.verbose:
+                print(f'Testing {steered_persona.persona_description} on {test_persona.persona_description}')
+            
+            # Choose inference strategy based on system capabilities
+            if steered_system.supports_batch_inference():
+                responses_dict = await self._get_responses_batched(
+                    steered_system=steered_system,
+                    test_observations=test_observations,
+                    steered_persona=steered_persona,
+                    test_persona=test_persona,
+                    batch_size=self.config.inference_batch_size
+                )
+            else:
+                responses_dict = await self._get_responses_sequential(
+                    steered_system=steered_system,
+                    test_observations=test_observations,
+                    steered_persona=steered_persona,
+                    test_persona=test_persona
+                )
+            
+            # Calculate score
+            correct_responses = sum(
+                1 for response_dict in responses_dict.values()
+                if response_dict['response'] == response_dict['correct_response']
+            )
+            total_observations = len(responses_dict)
+            score = correct_responses / total_observations
+            
+            # Save results
+            self._save_responses(steered_persona_id, test_persona_id, responses_dict)
+            self._save_score(steered_persona_id, test_persona_id, score)
+            return score
+
+    async def _get_responses_sequential(
+        self,
+        steered_system: BaseSteeredSystem,
+        test_observations: List[Observation],
+        steered_persona: Persona,
+        test_persona: Persona,
+    ) -> Dict[str, Dict[str, str]]:
+        """Get responses one at a time"""
+        responses_dict: Dict[str, Dict[str, str]] = {}
         sleep_time = 1
         n_errors = 0
 
-        async with semaphore:
-            responses_dict: Dict[str, Dict[str, str]] = {}
-            if self.verbose:
-                print(f'Testing {steered_persona.persona_description} on {test_persona.persona_description}')
-            for test_observation in test_observations[:self.max_observations]:
-                if self.has_response(steered_persona, test_persona, test_observation):
-                    if self.verbose:
-                        print(f'Skipping {steered_persona.persona_description} on {test_persona.persona_description} - {test_observation.observation_id}')
-                    response_dict = self.responses[steered_persona_id][test_persona_id][test_observation.observation_id]
-                    if response_dict['response'] == response_dict['correct_response']:
-                        correct_responses += 1
-                    continue
-                correct_response = test_observation.correct_response
-                have_response = False
-                while not have_response:
-                    try:
-                        response = await steered_system.run_inference_async(test_observation)
-                        have_response = True
-                    except Exception as e:
-                        sleep_time = sleep_time * 2 ** n_errors
-                        print(f'Error running inference for {steered_persona.persona_description} on {test_persona.persona_description} - {test_observation.observation_id}. Sleeping for {sleep_time} seconds.')
-                        print(e)
-                        await asyncio.sleep(sleep_time)
-                        n_errors += 1
-                response_dict = {
-                    'response': response,
-                    'correct_response': correct_response
-                }
-                responses_dict[test_observation.observation_id] = response_dict
-                if response == correct_response:
-                    correct_responses += 1
-        score = correct_responses / total_observations
-        self._save_responses(steered_persona_id, test_persona_id, responses_dict)
-        self._save_score(steered_persona_id, test_persona_id, score)
-        return score
+        for test_observation in test_observations[:self.max_observations]:
+            if self.has_response(steered_persona, test_persona, test_observation):
+                if self.verbose:
+                    print(f'Skipping {test_observation.observation_id}')
+                continue
+
+            have_response = False
+            while not have_response:
+                try:
+                    response = await steered_system.run_inference_async(test_observation)
+                    print(f'Response: {response}')
+                    have_response = True
+                except Exception as e:
+                    sleep_time = sleep_time * 2 ** n_errors
+                    print(f'Error on observation {test_observation.observation_id}')
+                    print(f'Error type: {type(e).__name__}')
+                    print(f'Error message: {str(e)}')
+                    print(f'Sleeping for {sleep_time} seconds.')
+                    print(f'Traceback: {traceback.format_exc()}')
+                    await asyncio.sleep(sleep_time)
+                    n_errors += 1
+
+            responses_dict[test_observation.observation_id] = {
+                'response': response,
+                'correct_response': test_observation.correct_response
+            }
+
+        return responses_dict
+
+    async def _get_responses_batched(
+        self,
+        steered_system: BaseSteeredSystem,
+        test_observations: List[Observation],
+        steered_persona: Persona,
+        test_persona: Persona,
+        batch_size: int
+    ) -> Dict[str, Dict[str, str]]:
+        """Get responses in batches"""
+        responses_dict: Dict[str, Dict[str, str]] = {}
+        
+        # Filter out observations we already have responses for
+        remaining_observations = [
+            obs for obs in test_observations[:self.max_observations]
+            if not self.has_response(steered_persona, test_persona, obs)
+        ]
+
+        # Process in batches
+        for i in range(0, len(remaining_observations), batch_size):
+            try:
+                n_errors = 0
+                sleep_time = 1
+                batch = remaining_observations[i:i + batch_size]
+                batch_responses = await steered_system.run_batch_inference_async(batch)
+                
+                # Add responses to dict
+                for observation, response in zip(batch, batch_responses):
+                    responses_dict[observation.observation_id] = {
+                        'response': response,
+                        'correct_response': observation.correct_response
+                    }
+            except Exception as e:
+                print(f'Error processing batch {i//batch_size}')
+                print(f'Error type: {type(e).__name__}')
+                print(f'Error message: {str(e)}')
+                traceback.print_exc()
+                sleep_time = sleep_time * 2 ** n_errors
+                print(f'Sleeping for {sleep_time} seconds.')
+                await asyncio.sleep(sleep_time)
+                n_errors += 1
+                raise
+
+        return responses_dict
 
     def _get_responses_path(self) -> Path:
         """Get path to responses file"""

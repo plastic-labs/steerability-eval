@@ -46,11 +46,7 @@ class HonchoState(SteeredSystemState):
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'HonchoState':
         """Create state from dictionary"""
-        persona = Persona(
-            persona_id=data['persona_id'],
-            persona_description=data['persona_description'],
-            framework=data['framework']
-        )
+        persona = Persona(**data['persona'])
         observations = [Observation.from_dict(observation_data) for observation_data in data['observations']]
         return cls(
             persona=persona,
@@ -226,7 +222,7 @@ class AsyncHonchoSteerable(BaseSteerableSystem):
         """Get the state class for this steerable system"""
         return HonchoState
 
-    async def create_steered_from_state(self, state: HonchoState) -> 'AsyncHonchoSteeredSystem':
+    async def create_steered_from_state_async(self, state: HonchoState) -> 'AsyncHonchoSteeredSystem':
         """Create a steered system from saved state"""
         steered_system = AsyncHonchoSteeredSystem(
             persona=state.persona,
@@ -243,7 +239,7 @@ class AsyncHonchoSteerable(BaseSteerableSystem):
         steered_system.user_representation = state.user_representation
         return steered_system
 
-    async def steer(self, persona: Persona, observations: List[Observation]) -> 'AsyncHonchoSteeredSystem':
+    async def steer_async(self, persona: Persona, observations: List[Observation]) -> 'AsyncHonchoSteeredSystem':
         steered_system = await AsyncHonchoSteeredSystem.create(
             persona=persona,
             steerable_system=self,
@@ -254,6 +250,10 @@ class AsyncHonchoSteerable(BaseSteerableSystem):
             wait_on_init=self.wait_on_init
         )
         return steered_system
+
+    @classmethod
+    def supports_async_steering(cls) -> bool:
+        return True
 
 
 class AsyncHonchoSteeredSystem(BaseSteeredSystem):

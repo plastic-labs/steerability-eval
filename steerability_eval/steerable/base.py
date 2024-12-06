@@ -30,6 +30,10 @@ class BaseSteerableSystem:
         """Create a steered system instance from a state"""
         raise NotImplementedError
 
+    async def create_steered_from_state_async(self, state: SteeredSystemState) -> 'BaseSteeredSystem':
+        """Create a steered system instance from a state"""
+        raise NotImplementedError
+
     def __repr__(self):
         return f'{self.__class__.__name__}()'
 

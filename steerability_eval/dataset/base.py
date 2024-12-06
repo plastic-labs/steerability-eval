@@ -34,7 +34,6 @@ class Persona:
             'framework': self.framework or ''
         }
 
-
 @dataclass
 class Observation:
     observation_id: ObservationId

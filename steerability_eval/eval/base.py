@@ -18,6 +18,7 @@ from steerability_eval.dataset.base import BaseDataset, Persona, Observation, Pe
 from steerability_eval.dataset import get_dataset_class
 from steerability_eval.steerable import get_steerable_system_class
 from steerability_eval.steerable.state import SteeredSystemState
+from steerability_eval.eval.config import EvalConfig
 
 AGREE_STR = 'Y'
 DISAGREE_STR = 'N'
@@ -35,7 +36,8 @@ class BaseEval(ABC):
                  n_steer_observations_per_persona: int = 5,
                  max_observations: int = MAX_OBSERVATIONS,
                  verbose: bool = False,
-                 output_base_dir: str = 'output/experiments'):
+                 output_base_dir: str = 'output/experiments',
+                 config: Optional[EvalConfig] = None):
         # Set up basic structure and paths
         self.tested_system = tested_system
         self.dataset = dataset
@@ -44,6 +46,7 @@ class BaseEval(ABC):
         self.max_observations = max_observations
         self.steer_set, self.test_set = self.dataset.split(n_steer_observations_per_persona)
         self.verbose = verbose
+        self.config = config
 
         # Set up experiment directory
         self.experiment_name = experiment_name or datetime.now().strftime('%Y-%m-%d_%H-%M-%S')

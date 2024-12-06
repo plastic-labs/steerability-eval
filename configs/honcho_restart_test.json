@@ -1,20 +1,16 @@
 {
-    "experiment_name": "2024-12-04_15-58-35",
+    "experiment_name": "honcho_restart_test_1",
     "resume": true,
     "run_async": true,
     "restore_async": true,
     "max_concurrent_tests": 10,
     "personas_path": "dataset/personas_all_frameworks_2024-12-04.csv",
     "observations_path": "dataset/statements_all_frameworks_30_2024-12-04.csv",
-    "max_personas": 0,
+    "max_personas": 10,
     "random_state": 42,
     "n_steer_observations_per_persona": 4,
-    "steerable_system_type": "FewShotSteerable",
+    "steerable_system_type": "AsyncHonchoSteerable",
     "steerable_system_config": {
-        "llm_provider": "google",
-        "include_persona": false,
-        "include_observations": true,
-        "wait_on_init": true,
         "verbose": true
     },
     "verbose": true,

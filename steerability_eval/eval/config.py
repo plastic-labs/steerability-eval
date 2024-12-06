@@ -1,17 +1,17 @@
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Optional, Dict, Any
 
 @dataclass
 class EvalConfig:
     """Configuration for evaluation runs"""
     
     # Steerable system settings
-    steerable_system_type: str
-    steerable_system_config: dict
+    steerable_system_type: str = ''
+    steerable_system_config: Dict[str, Any] = field(default_factory=dict)
     
     # Dataset settings
-    personas_path: str
-    observations_path: str
+    personas_path: str = ''
+    observations_path: str = ''
     max_personas: int = 0  # 0 means use all personas
     random_state: int = 42
     n_steer_observations_per_persona: int = 4
@@ -19,12 +19,12 @@ class EvalConfig:
     
     # Runtime settings
     run_async: bool = False
+    restore_async: bool = False
     resume: bool = False
     verbose: bool = False
     max_concurrent_tests: int = 8
     output_base_dir: str = 'output/experiments'
     experiment_name: Optional[str] = None
-
 
     def to_dict(self) -> dict:
         """Convert config to dictionary for saving"""
@@ -36,11 +36,14 @@ class EvalConfig:
             'n_steer_observations_per_persona': self.n_steer_observations_per_persona,
             'max_observations': self.max_observations,
             'run_async': self.run_async,
+            'restore_async': self.restore_async,
             'resume': self.resume,
             'verbose': self.verbose,
             'max_concurrent_tests': self.max_concurrent_tests,
             'output_base_dir': self.output_base_dir,
-            'experiment_name': self.experiment_name
+            'experiment_name': self.experiment_name,
+            'steerable_system_type': self.steerable_system_type,
+            'steerable_system_config': self.steerable_system_config
         }
 
     @classmethod

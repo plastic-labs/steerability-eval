@@ -21,7 +21,8 @@ class AsyncSteerabilityEval(BaseEval):
                  n_steer_observations_per_persona: int = 5,
                  max_observations: int = MAX_OBSERVATIONS,
                  verbose: bool = False,
-                 output_base_dir: str = 'output/experiments'):
+                 output_base_dir: str = 'output/experiments',
+                 config: EvalConfig = EvalConfig()):
         super().__init__(
             tested_system=tested_system,
             dataset=dataset,
@@ -29,7 +30,8 @@ class AsyncSteerabilityEval(BaseEval):
             max_observations=max_observations,
             n_steer_observations_per_persona=n_steer_observations_per_persona,
             verbose=verbose,
-            output_base_dir=output_base_dir
+            output_base_dir=output_base_dir,
+            config=config
         )
 
     @classmethod
@@ -46,7 +48,8 @@ class AsyncSteerabilityEval(BaseEval):
             n_steer_observations_per_persona=config.n_steer_observations_per_persona,
             max_observations=config.max_observations,
             verbose=config.verbose,
-            output_base_dir=config.output_base_dir
+            output_base_dir=config.output_base_dir,
+            config=config
         )
         
         if config.resume:
@@ -70,7 +73,7 @@ class AsyncSteerabilityEval(BaseEval):
         for persona in self.personas:
             if persona.persona_id in self.steered_states:
                 # Restore from saved state
-                state = self._restore_steered_system_from_state(persona.persona_id)
+                state = self._restore_steered_system_from_state_sync(persona.persona_id)
                 self.steered_systems[persona.persona_id] = state
             else:
                 # Create new steered system
@@ -84,32 +87,46 @@ class AsyncSteerabilityEval(BaseEval):
         for persona in self.personas:
             if persona.persona_id in self.steered_states:
                 # Restore from saved state
-                state = self._restore_steered_system_from_state(persona.persona_id)
-                self.steered_systems[persona.persona_id] = state
+                if self.verbose:
+                    print(f'Restoring steered system for {persona.persona_description}')
+                tasks.append(self._restore_steered_system_from_state_async(persona.persona_id))
             else:
                 # Create new steered system
+                if self.verbose:
+                    print(f'Creating new steered system for {persona.persona_description}')
                 tasks.append(self._create_steered_system_async(persona))
         
         if tasks:
             steered_systems = await asyncio.gather(*tasks)
             for persona, system in zip(self.personas, steered_systems):
                 if persona.persona_id not in self.steered_states:
+                    if self.verbose:
+                        print(f'Saving state for {persona.persona_description}')
                     self._save_steered_system_state(persona.persona_id, system.get_state())
-                    self.steered_systems[persona.persona_id] = system
+                self.steered_systems[persona.persona_id] = system
 
     async def _create_steered_system_async(self, persona: Persona) -> BaseSteeredSystem:
         return await self.tested_system.steer_async(persona,
                                                     self.steer_set.get_observations_by_persona(persona))
 
-    def _restore_steered_system_from_state(self, persona_id: PersonaId) -> BaseSteeredSystem:
+    def _restore_steered_system_from_state_sync(self, persona_id: PersonaId) -> BaseSteeredSystem:
         state_data = self.steered_states[persona_id]
         state_class = self.tested_system.get_steered_state_class()
-        state = state_class.from_dict(state_data['state_data'])
-        return self.tested_system.create_steered_from_state(state)
+        state = state_class.from_dict(state_data)
+        steered_system = self.tested_system.create_steered_from_state(state)
+        return steered_system
+
+    async def _restore_steered_system_from_state_async(self, persona_id: PersonaId) -> BaseSteeredSystem:
+        state_data = self.steered_states[persona_id]
+        state_class = self.tested_system.get_steered_state_class()
+        state = state_class.from_dict(state_data)
+        steered_system = await self.tested_system.create_steered_from_state_async(state)
+        return steered_system
 
 
     async def run_eval(self, max_concurrent_tests: int = MAX_CONCURRENT_TESTS) -> None:
         semaphore = asyncio.Semaphore(max_concurrent_tests)
+        print(f'{self.steered_systems=}')
         tasks = []
         for steered_persona in self.personas:
             steered_system = self.steered_systems[steered_persona.persona_id]

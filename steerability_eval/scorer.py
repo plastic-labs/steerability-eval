@@ -4,7 +4,7 @@ from steerability_eval.eval.base import BaseEval
 class Scorer:
     def __init__(self, eval: BaseEval):
         self.eval = eval
-        self.scores_df = pd.DataFrame(self.eval.steered_system_scores)
+        self.scores_df = pd.DataFrame(self.eval.scores)
         
         # Sort both index and columns in the same order
         all_personas = sorted(self.scores_df.index)

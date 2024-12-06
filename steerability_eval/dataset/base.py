@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, List, Tuple, Type
+from typing import Optional, List, Tuple, Type, Dict
 
 import pandas as pd
 
@@ -27,6 +27,13 @@ class Persona:
     def __repr__(self):
         return f'Persona(persona_id={self.persona_id}, persona_description={self.persona_description}, framework={self.framework})'
 
+    def to_dict(self) -> Dict[str, str]:
+        return {
+            'persona_id': self.persona_id,
+            'persona_description': self.persona_description,
+            'framework': self.framework or ''
+        }
+
 
 @dataclass
 class Observation:
@@ -50,6 +57,27 @@ class Observation:
 
     def __repr__(self):
         return f'Observation(observation_id={self.observation_id}, persona_id={self.persona_id}, scenario={self.scenario[:30]}, response={self.response[:30]})'
+
+    def to_dict(self) -> Dict[str, str]:
+        return {
+            'observation_id': self.observation_id,
+            'persona_id': self.persona_id,
+            'scenario_id': self.scenario_id,
+            'scenario': self.scenario,
+            'response': self.response,
+            'correct_response': self.correct_response
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, str]) -> 'Observation':
+        return cls(
+            observation_id=data['observation_id'],
+            persona_id=data['persona_id'],
+            scenario_id=data['scenario_id'],
+            scenario=data['scenario'],
+            response=data['response'],
+            correct_response=data['correct_response']
+        )
 
 @dataclass
 class BaseDataset:

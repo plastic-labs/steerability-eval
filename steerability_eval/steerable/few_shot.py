@@ -53,7 +53,7 @@ class FewShotSteeredSystem(BaseSteeredSystem):
         self.include_persona = steerable_system.include_persona
         self.include_observations = steerable_system.include_observations
         self.prompt = self.generate_prompt(persona, observations)
-        self.llm = get_chat_model(self.llm_provider, self.model, self.api_key, self.base_url)
+        self.llm = get_chat_model(self.llm_provider, self.model, self.temperature, self.api_key, self.base_url)
         self.llm_chain = self.prompt | self.llm | JsonOutputParser()
 
     def generate_prompt(self, persona: Persona, observations: List[Observation]) -> PromptTemplate:

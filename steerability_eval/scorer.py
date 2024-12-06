@@ -1,8 +1,8 @@
 import pandas as pd
-from steerability_eval.eval import SteerabilityEval
+from steerability_eval.eval.base import BaseEval
 
 class Scorer:
-    def __init__(self, eval: SteerabilityEval):
+    def __init__(self, eval: BaseEval):
         self.eval = eval
         self.scores_df = pd.DataFrame(self.eval.steered_system_scores)
         

@@ -6,4 +6,3 @@ output/images/*
 output/experiments/*
 configs/*
 !configs/config_template.json
-!configs/2024-12-06-gpt4o-1.json

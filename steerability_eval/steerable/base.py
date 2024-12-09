@@ -15,10 +15,15 @@ class BaseSteerableSystem:
         """Optional async steering implementation"""
         raise NotImplementedError
     
-    @classmethod
-    def supports_async_steering(cls) -> bool:
+    @staticmethod
+    def supports_async_steering() -> bool:
         """Whether this system supports async steering"""
-        return False
+        raise NotImplementedError
+    
+    @staticmethod
+    def supports_saving_state() -> bool:
+        """Whether this system supports saving state"""
+        raise NotImplementedError
     
     @abstractmethod
     def get_steered_state_class(self) -> Type[SteeredSystemState]:
@@ -32,6 +37,16 @@ class BaseSteerableSystem:
 
     async def create_steered_from_state_async(self, state: SteeredSystemState) -> 'BaseSteeredSystem':
         """Create a steered system instance from a state"""
+        raise NotImplementedError
+
+    @staticmethod
+    def supports_batch_inference() -> bool:
+        """Whether this system supports batch inference"""
+        raise NotImplementedError
+
+    @staticmethod
+    def supports_async_inference() -> bool:
+        """Whether this system supports async inference"""
         raise NotImplementedError
 
     def __repr__(self):
@@ -50,11 +65,6 @@ class BaseSteeredSystem:
     async def run_inference_async(self, observation: Observation) -> SystemResponse:
         raise NotImplementedError
     
-    @classmethod
-    def supports_async_inference(cls) -> bool:
-        """Whether this system supports async inference"""
-        return False
-    
     @abstractmethod
     def get_state(self) -> SteeredSystemState:
         """Get serializable state for this steered system"""
@@ -67,10 +77,6 @@ class BaseSteeredSystem:
         """Wait for system to be ready for inference"""
         pass
 
-    @classmethod
-    def supports_batch_inference(cls) -> bool:
-        """Whether this system supports batch inference"""
-        return False
 
     async def run_batch_inference_async(
         self, 

@@ -71,6 +71,26 @@ class HonchoSteerable(BaseSteerableSystem):
         self.app = self.honcho.apps.get_or_create(name=honcho_app_id)
         self.verbose: bool = verbose
 
+    @staticmethod
+    def supports_async_steering() -> bool:
+        """Whether this system supports async steering"""
+        return False
+
+    @staticmethod
+    def supports_batch_inference() -> bool:
+        """Whether this system supports batch inference"""
+        return True
+
+    @staticmethod
+    def supports_async_inference() -> bool:
+        """Whether this system supports async inference"""
+        return False
+
+    @staticmethod
+    def supports_saving_state() -> bool:
+        """Whether this system supports saving state"""
+        return True
+        
     def steer(self, persona: Persona, observations: List[Observation]) -> 'HonchoSteeredSystem':
         steered_system = HonchoSteeredSystem(
             persona,
@@ -218,9 +238,30 @@ class AsyncHonchoSteerable(BaseSteerableSystem):
         self.app_id: str = app_id
         self.verbose: bool = verbose
 
-    def get_steered_state_class(self) -> Type[SteeredSystemState]:
+    @staticmethod
+    def supports_async_inference() -> bool:
+        """Whether this system supports async inference"""
+        return True
+    
+    @staticmethod
+    def supports_batch_inference() -> bool:
+        """Whether this system supports batch inference"""
+        return True
+
+    @staticmethod
+    def supports_async_steering() -> bool:
+        """Whether this system supports async steering"""
+        return True
+
+    @staticmethod
+    def get_steered_state_class() -> Type[SteeredSystemState]:
         """Get the state class for this steerable system"""
         return HonchoState
+
+    @staticmethod
+    def supports_saving_state() -> bool:
+        """Whether this system supports saving state"""
+        return True
 
     async def create_steered_from_state_async(self, state: HonchoState) -> 'AsyncHonchoSteeredSystem':
         """Create a steered system from saved state"""
@@ -251,9 +292,6 @@ class AsyncHonchoSteerable(BaseSteerableSystem):
         )
         return steered_system
 
-    @classmethod
-    def supports_async_steering(cls) -> bool:
-        return True
 
 
 class AsyncHonchoSteeredSystem(BaseSteeredSystem):
@@ -316,6 +354,7 @@ class AsyncHonchoSteeredSystem(BaseSteeredSystem):
             app_id=instance.app.id, 
             name=instance.username
         )
+        print(f'Creating steered system for {instance.username}')
         instance.session = await instance.honcho.apps.users.sessions.create(
             app_id=instance.app.id,
             user_id=instance.user.id
@@ -331,6 +370,8 @@ class AsyncHonchoSteeredSystem(BaseSteeredSystem):
     async def send_steering_messages(self, observations: List[Observation]) -> None:
         for observation in observations:
             ai_message = f'Do you agree with this statement? "{observation.response}". Respond with "Y" or "N" and nothing else.'
+            ai_message = ai_message.replace('sensuality', 'appeal')
+            ai_message = ai_message.replace('exploit vulnerabilities', 'tackle opportunities')
             message = await self.honcho.apps.users.sessions.messages.create(
                 session_id=self.session.id,
                 app_id=self.app.id,

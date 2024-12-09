@@ -27,8 +27,15 @@ def create_experiment_dir(config: EvalConfig, config_path: Path) -> Path:
         shutil.copy2(config_path, config_dest)
     else:
         if not experiment_dir.exists():
-            raise ValueError(f"Cannot resume experiment - directory does not exist: {experiment_dir}")
-            
+            print(f'Warning: resume=True but experiment directory does not exist: {experiment_dir}. Create?')
+            response = input('y/n: ')
+            if response != 'y':
+                raise ValueError(f'User aborted experiment creation: {experiment_dir}')
+            else:
+                experiment_dir.mkdir(parents=True)
+                # Copy config file to experiment directory
+                config_dest = experiment_dir / f"{config.experiment_name}.json"
+                shutil.copy2(config_path, config_dest)
     return experiment_dir
 
 

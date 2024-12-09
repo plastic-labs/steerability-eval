@@ -47,6 +47,9 @@ class BaseEval(ABC):
         self.steer_set, self.test_set = self.dataset.split(n_steer_observations_per_persona)
         self.verbose = verbose
         self.config = config
+        self.batched_inference = self._set_batched_inference()
+        self.async_inference = self._set_async_inference()
+        self.async_steering = self.tested_system.supports_async_steering()
 
         # Set up experiment directory
         self.experiment_name = experiment_name or datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
@@ -58,6 +61,26 @@ class BaseEval(ABC):
         self.steered_states: Dict[PersonaId, Dict[str, Any]] = {}
         self.responses: Dict = {}
         self.scores: Dict = {}
+
+    def _set_batched_inference(self) -> bool:
+        """Set whether batched inference is used"""
+        if self.config.batched_inference:
+            if self.tested_system.supports_batch_inference():
+                return True
+            else:
+                print('Warning: batched inference requested but tested system does not support batch inference')
+                return False
+        return False
+
+    def _set_async_inference(self) -> bool:
+        """Set whether async inference is used"""
+        if self.config.run_async:
+            if self.tested_system.supports_async_inference():
+                return True
+            else:
+                print('Warning: async inference requested but tested system does not support async inference')
+                return False
+        return False
 
     def _get_responses_path(self) -> Path:
         """Get path to responses file"""

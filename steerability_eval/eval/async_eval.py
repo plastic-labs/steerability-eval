@@ -60,55 +60,66 @@ class AsyncSteerabilityEval(BaseEval):
         return instance
 
     def load_state(self) -> None:
-        self.steered_states = self._load_steered_system_states()
+        if self.tested_system.supports_saving_state():
+            self.steered_states = self._load_steered_system_states()
+            print(f'Loaded {len(self.steered_states)} steered systems')
         self.responses = self._load_responses()
         self.scores = self._load_scores()
 
     async def get_steered_systems(self) -> None:
-        if self.tested_system.supports_async_steering():
+        if self.async_steering:
             await self._get_steered_systems_async()
         else:
             self._get_steered_systems_sync()
 
     def _get_steered_systems_sync(self) -> None:
         for persona in self.personas:
-            if persona.persona_id in self.steered_states:
+            if self.tested_system.supports_saving_state() and persona.persona_id in self.steered_states:
                 # Restore from saved state
-                state = self._restore_steered_system_from_state_sync(persona.persona_id)
-                self.steered_systems[persona.persona_id] = state
+                steered_system = self._restore_steered_system_from_state_sync(persona.persona_id)
+                if self.verbose:
+                    print(f'Restored steered system for {persona.persona_description} - {persona.persona_id}')
+                self.steered_systems[persona.persona_id] = steered_system
             else:
                 # Create new steered system
                 system = self.tested_system.steer(persona,
                                                   self.steer_set.get_observations_by_persona(persona))
-                self._save_steered_system_state(persona.persona_id, system.get_state())
+                if self.verbose:
+                    print(f'Created new steered system for {persona.persona_description} - {persona.persona_id}')
+                if self.tested_system.supports_saving_state():
+                    self._save_steered_system_state(persona.persona_id, system.get_state())
                 self.steered_systems[persona.persona_id] = system
 
     async def _get_steered_systems_async(self) -> None:
         tasks = []
+        semaphore = asyncio.Semaphore(self.config.max_concurrent_steering_tasks)
         for persona in self.personas:
-            if persona.persona_id in self.steered_states:
+            if self.tested_system.supports_saving_state() and persona.persona_id in self.steered_states:
                 # Restore from saved state
-                if self.verbose:
-                    print(f'Restoring steered system for {persona.persona_description}')
+                print(f'Restoring steered system for {persona.persona_description} - {persona.persona_id}')
                 tasks.append(self._restore_steered_system_from_state_async(persona.persona_id))
             else:
                 # Create new steered system
-                if self.verbose:
-                    print(f'Creating new steered system for {persona.persona_description}')
-                tasks.append(self._create_steered_system_async(persona))
+                tasks.append(self._create_steered_system_async(persona, semaphore))
         
         if tasks:
             steered_systems = await asyncio.gather(*tasks)
-            for persona, system in zip(self.personas, steered_systems):
-                if persona.persona_id not in self.steered_states:
-                    if self.verbose:
-                        print(f'Saving state for {persona.persona_description}')
-                    self._save_steered_system_state(persona.persona_id, system.get_state())
-                self.steered_systems[persona.persona_id] = system
+            for persona, steered_system in zip(self.personas, steered_systems):
+                self.steered_systems[persona.persona_id] = steered_system
+        else:
+            print('No steered systems to create')
 
-    async def _create_steered_system_async(self, persona: Persona) -> BaseSteeredSystem:
-        return await self.tested_system.steer_async(persona,
+    async def _create_steered_system_async(self, persona: Persona, semaphore: asyncio.Semaphore) -> BaseSteeredSystem:
+        async with semaphore:
+            if self.verbose:
+                print(f'Creating new steered system for {persona.persona_description}')
+            system = await self.tested_system.steer_async(persona,
                                                     self.steer_set.get_observations_by_persona(persona))
+            if self.tested_system.supports_saving_state():
+                if self.verbose:
+                    print(f'Saving state for {persona.persona_description}')
+                self._save_steered_system_state(persona.persona_id, system.get_state())
+            return system
 
     def _restore_steered_system_from_state_sync(self, persona_id: PersonaId) -> BaseSteeredSystem:
         state_data = self.steered_states[persona_id]
@@ -118,6 +129,8 @@ class AsyncSteerabilityEval(BaseEval):
         return steered_system
 
     async def _restore_steered_system_from_state_async(self, persona_id: PersonaId) -> BaseSteeredSystem:
+        if self.verbose:
+            print(f'Restoring steered system for {persona_id}')
         state_data = self.steered_states[persona_id]
         state_class = self.tested_system.get_steered_state_class()
         state = state_class.from_dict(state_data)
@@ -129,6 +142,7 @@ class AsyncSteerabilityEval(BaseEval):
         semaphore = asyncio.Semaphore(max_concurrent_tests)
         tasks = []
         for steered_persona in self.personas:
+            print(f'Running eval for {steered_persona.persona_description} - {steered_persona.persona_id}')
             steered_system = self.steered_systems[steered_persona.persona_id]
             for test_persona in self.personas:
                 if not self.has_score(steered_persona, test_persona):
@@ -155,8 +169,7 @@ class AsyncSteerabilityEval(BaseEval):
             if self.verbose:
                 print(f'Testing {steered_persona.persona_description} on {test_persona.persona_description}')
             
-            # Choose inference strategy based on system capabilities
-            if steered_system.supports_batch_inference():
+            if self.batched_inference:
                 responses_dict = await self._get_responses_batched(
                     steered_system=steered_system,
                     test_observations=test_observations,
@@ -207,7 +220,6 @@ class AsyncSteerabilityEval(BaseEval):
             while not have_response:
                 try:
                     response = await steered_system.run_inference_async(test_observation)
-                    print(f'Response: {response}')
                     have_response = True
                 except Exception as e:
                     sleep_time = sleep_time * 2 ** n_errors
@@ -331,6 +343,7 @@ class AsyncSteerabilityEval(BaseEval):
 
     def _load_steered_system_states(self) -> Dict[PersonaId, Dict[str, Any]]:
         path = self._get_steered_states_path()
+        print(f'Loading steered states from {path}')
         if path.exists():
             with open(path) as f:
                 return json.load(f)

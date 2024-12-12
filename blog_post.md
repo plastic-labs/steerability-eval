@@ -1,49 +1,45 @@
+*This is a research update on our ongoing work to implement concrete benchmarks for measuring AI systems' ability to adapt to different users. We've created what we believe is the first implementation of a "trade-off steerable benchmark" - a framework proposed by Sorensen et al. for evaluating how well AI systems can be steered to reflect different perspectives. While we've made progress on the core dataset and evaluation pipeline, several key questions remain about how to make this benchmark as useful as possible to the research community. We're sharing this update to gather feedback at NeurIPS 2024 in Vancouver on the most valuable directions to take this work.*
 # 1. Measuring AI Systems' Ability to Adapt to Different Users
-
-At Plastic Labs, we're building AI systems that can adapt to and act on behalf of their users. As these systems become more capable, it's critical that we can reliably measure their ability to faithfully represent different people's views and behaviors.
+At Plastic Labs, we're building AI systems that can adapt to and act on behalf of their users. As we continue to improve these systems, it's critical that we can reliably measure their ability to faithfully represent different people's views and behaviors.
 
 Today we're introducing a new evaluation framework that systematically tests an AI system's ability to adapt to different personas. Our framework is inspired by recent work on pluralistic alignment - the idea that AI systems should be able to reflect diverse human values rather than being aligned to a single set of preferences. We've implemented what we believe is the first "trade-off steerable benchmark", a new type of evaluation proposed by Sorensen et al. that measures how well AI systems can be steered to reflect different perspectives.
 ## Why This Matters
-
 The AI community has made remarkable progress in building powerful language models that can engage in open-ended dialogue. However, these models are typically aligned through techniques like RLHF that optimize for a single set of "average" human preferences. This approach falls short when we want AI systems that can truly adapt to individual users with different values, personalities and preferences.
 
 Recent work has established the importance of pluralistic alignment - ensuring AI systems can faithfully represent diverse human perspectives. While conceptual frameworks for measuring this capability have been proposed, notably by Sorensen et al., the authors acknowledge that to their knowledge no concrete implementations of these frameworks exist yet. This makes it difficult to assess progress or compare different approaches.
 
 ## Our Approach
-
 We've created an evaluation framework that systematically measures an AI system's ability to adapt to different personas. The core idea is simple: we give the system a few examples of how a persona thinks and behaves, then test whether it can accurately predict that persona's views on new scenarios. By testing many different personas and comparing how well each steered version of the system maintains fidelity to its target persona, we can quantify how "steerable" the system is.
 
 Our research questions include:
-
 - Can we reliably measure a system's ability to adapt to different personas?
 - How well do simple steering approaches like few-shot learning actually perform?
 
 In the following sections, we'll detail our methodology and share initial results that shed light on these questions. We hope this work helps establish more rigorous ways to evaluate AI systems' ability to reflect human diversity.
 
 # 2. Creating a Dataset to Test Personality Adaptation
+To evaluate an AI system's ability to adapt to different personas, we first needed a dataset of diverse personalities and their characteristic behaviors. We approached this as a careful balance between coverage, quality and cost - we wanted to represent a wide range of human personalities while ensuring the data was reliable enough to serve as ground truth, all while keeping the time and compute required to develop the dataset to a reasonable minimum.
 
-To evaluate an AI system's ability to adapt to different personas, we first needed a dataset of diverse personalities and their characteristic behaviors. We approached this as a careful balance between coverage and quality - we wanted to represent a wide range of human personalities while ensuring the data was reliable enough to serve as ground truth.
+## Seeding Diverse Personas
+For our initial implementation, we needed a systematic way to generate personas that would exhibit meaningfully different attitudes and behaviors. While recent work like the Billion Personality Dataset has explored prompting LLMs with simple role descriptions like "a musician interested in audio processing" or "a moving company driver", there's no guarantee such prompts will produce distinct behavioral patterns. Instead, we used five well-known personality frameworks (Myers-Briggs Type Indicator, Enneagram, Big Five, Zodiac signs, and Tarot archetypes) that each attempt to provide complete coverage of human personality space. 
 
-## Choosing Personality Frameworks
-
-We selected five well-established frameworks for describing personality: Myers-Briggs Type Indicator (MBTI), Enneagram, Big Five, Zodiac signs, and Tarot archetypes. While some of these frameworks are more scientifically validated than others, we chose them because they are extensively documented in readily available texts, making them likely to be well-represented in language model training data.
-
-This combination of frameworks gives us broad coverage of personality space. MBTI provides 16 types based on cognitive preferences, Enneagram describes 9 core motivations, Big Five measures 5 key personality dimensions, while Zodiac and Tarot offer 12 and 22 archetypal patterns respectively. Importantly, there is natural overlap between frameworks - an INFP personality type might share traits with an Enneagram Type 4 or the Moon card archetype. This overlap helps us evaluate how systems handle similar but distinct personas, mirroring real-world scenarios.
-
+Our choice of these frameworks isn't an endorsement of their scientific validity - rather, they give us a structured way to sample distinct points across the spectrum of human personalities. These frameworks are also extensively represented in language model training data, making them practical seeds and shorthands for persona generation.
 ## Generating Representative Statements
+For each persona, we used GPT-4o as a generator model to produce statements that would characteristically be agreed or disagreed with by someone of that persona. In order to speed up the generation process, we prompt the generator model to output 20 statements of a certain type ("agree" or "disagree") at the same time.
 
-For each persona, we used GPT-4 to generate statements that would characteristically be agreed or disagreed with by someone of that personality type. To ensure quality, we implemented a two-stage validation process:
+However, upon manual inspection we identified a few issues. First, we found that prompting the generator to output many statements in a single inference caused their quality to decline: our subjective perception was that generating more than 5-10 statements in a single inference led  them, especially the ones near the end of the list, to be less aligned with the prompted personality type. Second, when trying to address this by running multiple inferences with a lower number of output statements (e.g. running 5 inferences generating 4 statements each, rather than a single inference generating 20 statements), we found that, even with high temperature settings, the resulting statements were very similar across inferences.
 
-1. Agreement Validation: We used a separate language model to independently verify whether each generated statement would indeed be agreed/disagreed with by the target persona. This filtered out about 10% of generated statements where the models disagreed, helping ensure statement validity.
-2. Diversity Check: To avoid redundant or too-similar statements, we computed embedding-based cosine similarity between all statements generated for each persona. Statements with similarity above 84% were filtered out - a threshold we found empirically balanced statement uniqueness against generation efficiency.
+To address these issues and ensure both alignment with the seed persona and diversity across statements, we implemented a two-stage validation process:
+
+1. Agreement Validation: We used a separate filtering model, seeded with the same persona as the generator, to independently verify whether each generated statement would indeed be agreed/disagreed with by the target persona. When generating 20 statements per inference, this stage filtered out about 10-20% of generated statements, helping ensure statement validity.
+2. Diversity Check: To avoid redundant or highly similar statements, we computed embedding-based cosine similarity between all statements generated for each persona, using OpenAI's `text-embedding-3-large` model. Statements with similarity above 84% were filtered out - a threshold we found empirically balanced statement uniqueness against generation efficiency.
+The generation process runs in a loop, first prompting the generator to produce 30 agree and 30 disagree statements in two separate inferences, then running them through the filtering model to remove statements inconsistent with the persona, and finally computing embedding-based cosine similarity to remove redundant statements. The loop continues, generating 30 additional statements, adding them to the pool of candidates, filtering them and deduplicating them, until 30 valid and diverse statements are obtained for each persona, for both the agree and disagree categories.
 
 The final dataset contains 60 statements per persona (30 agree/30 disagree), totaling 6,000 statements across 100 personas. Here are some example statements showing the range of personality expression:
 [2-3 examples showing contrast between different personas]
 
 ## Dataset Characteristics
-
 Our generation and filtering process produced a dataset with several noteworthy properties:
-
 ### Comprehensive Coverage
 Each personality framework aims to provide complete coverage of human personality types, particularly MBTI, Enneagram, and Big Five which were developed specifically for this purpose. By sampling all personalities across all frameworks, we get multiple complete traversals of personality space according to different theoretical lenses.
 ### Natural Overlap
@@ -122,31 +118,26 @@ Figure 3 shows the distribution of sensibility scores across all steered systems
 - Histogram of $f_p(M_p)$ values
 - Mean and median sensibility
 - Notable outliers - which personas were easiest/hardest to steer towards?
-# 5. Discussion and Future Work
+# 5. Open Questions for Discussion at NeurIPS
 
-Our main contribution is providing the first concrete implementation of a trade-off steerable benchmark, moving from theoretical frameworks to practical evaluation. The system is designed to be modular and extensible - researchers can easily test new steering approaches by implementing a simple interface that defines how their system adapts to different personas. Our implementation handles the complexities of dataset management, evaluation across personas, and scoring computation. All code is available at [repository link], including both the evaluation framework and our baseline few-shot implementation.
-## Limitations of Current Approach
+We're at NeurIPS in Vancouver this week, and we're sharing this work early to get community input on several key questions for the project's direction. Here are some of them:
 
-Our initial implementation of a trade-off steerable benchmark reveals both promises and limitations. While few-shot steering shows surprisingly good performance on our test, this might be partially explained by the nature of our evaluation: the test itself is structured similarly to the steering process, where we ask the system to predict agreement based on previous examples of agreement.
+1. Evaluation Modes
 
-This raises important questions about what we're actually measuring. Are we testing a system's ability to truly model and act as different personas, or are we mainly testing its ability to recognize and extend patterns in agree/disagree responses? A system could potentially perform well on our benchmark without developing a deeper understanding of the personas it's modeling.
+- Should we expand beyond agree/disagree prediction to conversational evaluation?
+- What are the tradeoffs between easy-to-measure metrics like binary agreement vs richer but harder-to-evaluate interactions?
+- How can we best capture true personality adaptation rather than simple pattern matching?
 
-## Making the Evaluation More Robust
+2. Dataset Considerations
 
-Several directions could help create a more challenging and meaningful evaluation:
+- Is our current coverage of personality space through 5 frameworks sufficient?
+- How important is expert validation of the generated persona statements?
+- Should we prioritize adding more personas, more statements per persona, or more diverse statement types?
 
-1. Conversational Evaluation: Rather than limiting tests to binary agreement prediction, we could evaluate steered systems through open-ended dialogue. Recent work has shown that using LLMs as judges for conversational ability can produce reliable ratings. This would test whether systems can maintain consistent persona traits across diverse interactions.
-2. Dataset Improvements: While our current dataset samples across multiple personality frameworks, we could:
-    - Validate that personas are sufficiently distinct
-    - Add more diverse types of statements
-    - Ensure stronger ground truth through expert validation
-3. Alternative Measurement Approaches: Beyond binary agreement, we could explore:
-    - Scalar ratings (once technical challenges around reliable numerical outputs are addressed)
-    - Multiple choice responses
-    - Natural language explanations of choices
+3. Technical Architecture
 
-## Concluding Remarks
+- What additional steering approaches should we support beyond few-shot and theory-of-mind based methods?
+- How can we make the evaluation framework more useful to other researchers?
+- What visualizations and analysis tools would be most helpful for understanding system behavior?
 
-Rather than simply making our evaluation larger (e.g., adding more personas or statements), we believe the key to improvement lies in making it more representative of real-world personality adaptation. This likely means moving beyond simple agreement prediction toward richer forms of interaction and evaluation.
-
-Our work provides a starting point for systematically measuring AI systems' ability to adapt to different personas. We hope this initial implementation spurs further development of more sophisticated evaluations that can better capture the nuances of human personality.
+We believe the most valuable feedback will come from discussing these questions with researchers working on pluralistic alignment, evaluation design, and personalized AI systems. Our implementation provides a concrete starting point, but we want to ensure its evolution is guided by the needs of the broader research community.

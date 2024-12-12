@@ -4,6 +4,7 @@ import dotenv
 
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_anthropic import ChatAnthropic
 
 dotenv.load_dotenv('local.env')
 
@@ -14,6 +15,10 @@ OPENROUTER_MODEL = 'meta-llama/llama-3.2-3b-instruct:free'
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 OPENAI_BASE_URL = 'https://api.openai.com/v1'
 OPENAI_MODEL = 'gpt-4o-mini'
+
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
+ANTHROPIC_BASE_URL = 'https://api.anthropic.com/v1'
+ANTHROPIC_MODEL = 'claude-3-5-sonnet-latest'
 
 TINYBOX_API_KEY = 'dummy'
 TINYBOX_TAILSCALE_URL = os.getenv('TINYBOX_TAILSCALE_URL')
@@ -72,6 +77,17 @@ def get_chat_google_genai(
     return ChatGoogleGenerativeAI(model=model, api_key=api_key) # type: ignore
 
 
+def get_chat_anthropic(
+    model: Optional[str] = ANTHROPIC_MODEL,
+    api_key: Optional[str] = ANTHROPIC_API_KEY
+):
+    if model is None:
+        model = ANTHROPIC_MODEL
+    if api_key is None:
+        api_key = ANTHROPIC_API_KEY
+    return ChatAnthropic(model=model, api_key=api_key)
+
+
 def get_chat_model(provider: str,
                    model: Optional[str] = None,
                    temperature: Optional[float] = DEFAULT_TEMPERATURE,
@@ -79,6 +95,8 @@ def get_chat_model(provider: str,
                    base_url: Optional[str] = None):
     if provider == 'google':
         return get_chat_google_genai(model, api_key)
+    elif provider == 'anthropic':
+        return get_chat_anthropic(model, api_key)
     else:
         print(temperature)
         return get_chat_openai(provider, model, temperature, api_key, base_url)

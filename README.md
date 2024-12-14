@@ -18,43 +18,69 @@ Our initial experiments with few-shot steerable systems showed:
 - Models showed clear ability to maintain distinct behavior patterns while adapting to different personas
 - Natural clustering emerged between similar personas across frameworks
 
+
 ## Getting Started
+
+_**Note:** This project is still under active development. Some of the code isn't beautiful, and there is old code lying around. We're working on cleaning it up - in the meantime, proceed with caution and let us know if you run into any issues._
+
+We strongly recommend that you create a Python virtual environment to manage dependencies. After you've done this, install the dependencies:
+
+``` bash
+pip install -r requirements.txt
+```
 
 ### Creating the Dataset
 
 The dataset generation pipeline creates personality-aligned statements using LLMs with filtering for quality and diversity:
 
-Set up environment variables in local.env
-```
-OPENAI_API_KEY=<your_key>
-GOOGLE_API_KEY=<your_key>
+Copy `local.env.template` to `local.env` and set your API keys.
+
+``` bash
+cp local.env.template local.env
 ```
 
-Generate the dataset
-```
-python scripts/create_dataset.py
+Run the dataset generation script. From the root directory, run:
+
+``` bash
+python -m scripts.create_dataset
 ```
 
 ### Running the Evaluation
 
+Copy `config_template.json` to `my_eval.json` and set your evaluation parameters.
 ``` bash
 cp configs/config_template.json configs/my_eval.json
 ```
 
 ``` json
 {
-"experiment_name": "my_evaluation",
-"steerable_system_type": "FewShotSteerable",
-"steerable_system_config": {
-"llm_provider": "google",
-},
-"personas_path": "dataset/personas_all_frameworks_<date>.csv",
-"observations_path": "dataset/statements_all_frameworks_30_<date>.csv"
-}
+    "experiment_name": "2024-12-11-claude-40-1",
+    "resume": true,
+    "run_async": true,
+    "restore_async": true,
+    "max_concurrent_tests": 10,
+    "max_concurrent_steering_tasks": 8,
+    "personas_path": "dataset/personas_all_frameworks_2024-12-04.csv",
+    "observations_path": "dataset/statements_all_frameworks_30_2024-12-04.csv",
+    "max_personas": 40,
+    "random_state": 42,
+    "n_steer_observations_per_persona": 4,
+    "inference_batch_size": 10,
+    "batched_inference": false,
+    "steerable_system_type": "FewShotSteerable",
+    "steerable_system_config": {
+        "llm_provider": "anthropic",
+        "model": "claude-3-5-sonnet-latest",
+        "verbose": true
+    },
+    "verbose": true,
+    "output_base_dir": "output/experiments"
+} 
 ```
 
+Run the evaluation. From the root directory, run:
 ``` bash
-python scripts/run_statements_eval.py configs/my_eval.json
+python -m scripts.run_statements_eval configs/my_eval.json
 ```
 
 ### Citing this work

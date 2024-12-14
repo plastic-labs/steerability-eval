@@ -1,3 +1,5 @@
+Dani Balcells and the Plastic Labs team. December 2024.
+
 *This is a research update on our ongoing work to implement concrete benchmarks for measuring AI systems' ability to adapt to different users. We've created what we believe is the first implementation of a "trade-off steerable benchmark" - a framework proposed by Sorensen et al. for evaluating how well AI systems can be steered to reflect different perspectives. While we've made progress on the core dataset and evaluation pipeline, several key questions remain about how to make this benchmark as useful as possible to the research community. We're sharing this update to gather feedback at NeurIPS 2024 in Vancouver on the most valuable directions to take this work.*
 # 1. Measuring AI Systems' Ability to Adapt to Different Users
 At Plastic Labs, we're building AI systems that can adapt to and act on behalf of their users. As we continue to improve these systems, it's critical that we can reliably measure their ability to faithfully represent different people's views and behaviors.

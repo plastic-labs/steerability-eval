@@ -87,10 +87,10 @@ python -m scripts.run_statements_eval configs/my_eval.json
 
 ``` bibtex
 @misc{steerable-benchmark-2024,
-title={A Trade-off Steerable Benchmark for Evaluating AI Adaptation},
+title={LLM Steerability Evaluation},
 author={Plastic Labs},
 year={2024},
-howpublished={\url{https://github.com/plasticlabs/steerable-benchmark}}
+howpublished={\url{https://github.com/plastic-labs/steerability-eval}}
 }
 ```
 

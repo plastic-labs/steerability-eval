@@ -1,4 +1,4 @@
-# LLM Steerability Benchmark
+# LLM Steerability Evaluation
 
 This repository contains an implementation of a "trade-off steerable benchmark" - a framework for evaluating how well AI systems can adapt to reflect different user perspectives and personalities. The benchmark includes:
 
